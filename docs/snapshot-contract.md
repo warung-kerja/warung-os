@@ -1,7 +1,7 @@
 # Warung OS — Snapshot Contract
 
 **Schema version:** `1`
-**Updated:** 2026-05-31 (Task 5 — cron/provider health adapter)
+**Updated:** 2026-06-01 (Task 6 — Obsidian project tracker adapter)
 **Owner:** Mia (tech lead)
 
 ---
@@ -102,20 +102,31 @@ is older than the threshold.
 
 ---
 
-## Adapter status (as of Task 5)
+## Adapter status (as of Task 6)
 
 | Adapter | Status | Data source |
 |---------|--------|-------------|
 | `workspace_signal` | **Real** | `git log`, `git status --porcelain` on warung-os repo |
-| `source_health` | **Real** | `fs.stat` on snapshot, Hermes cron/config metadata files + `git status` on repo |
+| `source_health` | **Real** | `fs.stat` on snapshot, Hermes cron/config files, Obsidian projects dir + `git status` |
 | `cron_jobs` | **Real (sanitized)** | Active Hermes profile `cron/jobs.json`; prompts, delivery targets, and chat IDs omitted |
 | `hermes_model_health` | **Partial** | Active Hermes profile `config.yaml` model/provider metadata; no live API/latency check |
+| `projects.items` | **Real (frontmatter only)** | `03_Active_Projects/` folder scan; YAML frontmatter parsed; folder paths redacted; body not read |
 | `agent_token_daily` | Unavailable | Hermes log adapter not yet connected |
 | `model_token_daily` | Unavailable | Hermes log adapter not yet connected |
 | `tool_usage_daily` | Unavailable | Hermes log adapter not yet connected |
 | `dot_delegation` | Unavailable | Live Hermes delegation tracker not yet connected |
 | `team_members` (projects) | Static placeholder | Live Hermes agent status adapter not yet connected |
-| `wiki.entries` | Unavailable | Obsidian adapter not yet connected |
+| `wiki.entries` | Unavailable | Scope/folders not yet approved by Raz |
+
+### projects.items adapter detail
+
+- Scans `~/Documents/Warung Kerja 1.0/03_Active_Projects/` — approved folder only.
+- Skips `_Archive`, `_Work Queue`, `_registry`, and any folder prefixed with `_`.
+- For each project folder, reads ONLY the YAML frontmatter of the first "Project Home" `.md` file found (falls back to first `.md` alphabetically).
+- Fields extracted: `project` (name), `status`, `owner`, `created`, `updated`. No body content read.
+- Projects without frontmatter: `registry_status: "unstructured"`, `status: "unknown"`.
+- `folder_path` is always `null` — Obsidian vault absolute paths are not exposed in snapshots.
+- `warung-os` is additionally enriched with `source_root` and git-derived timestamps.
 
 When an adapter is unavailable, the generator writes an empty array or `null` and adds an entry to `adapter_warnings`. The UI shows `—unavailable—` in those panels. Never fabricate values.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Warung OS — Hermes-safe local snapshot generator
- * Task 5: cron/provider health adapter
+ * Task 6: Obsidian project tracker adapter
  *
  * Outputs: public/snapshots/latest.json
  * Run:     npm run snapshot:generate
@@ -17,10 +17,11 @@
  *   not live API latency/availability.
  *
  * REAL data collected by this generator:
- *   workspace_signal  — warung-os git log (branch, HEAD, commits, file churn, working tree)
- *   source_health     — filesystem checks (snapshot file, git repo, cron/config files)
- *   cron_jobs         — sanitized Hermes profile cron job metadata from cron/jobs.json
+ *   workspace_signal    — warung-os git log (branch, HEAD, commits, file churn, working tree)
+ *   source_health       — filesystem checks (snapshot file, git repo, cron/config, Obsidian projects dir)
+ *   cron_jobs           — sanitized Hermes profile cron job metadata from cron/jobs.json
  *   hermes_model_health — sanitized Hermes profile model config from config.yaml
+ *   projects.items      — Obsidian 03_Active_Projects/ folder scan; YAML frontmatter only; folder paths redacted
  *
  * PLACEHOLDER / UNAVAILABLE:
  *   agent_token_daily, model_token_daily, tool_usage_daily — requires Hermes log adapter
@@ -29,7 +30,7 @@
  *   team_members    — static; requires live Hermes agent status adapter
  */
 
-import { writeFileSync, readFileSync, mkdirSync, existsSync, statSync } from 'fs'
+import { writeFileSync, readFileSync, readdirSync, mkdirSync, existsSync, statSync, openSync, readSync, closeSync } from 'fs'
 import { execSync } from 'child_process'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -41,6 +42,9 @@ const OUT_FILE = join(OUT_DIR, 'latest.json')
 const HERMES_PROFILE_DIR = '/Users/gabi/.hermes/profiles/tech-director'
 const HERMES_CRON_JOBS_FILE = join(HERMES_PROFILE_DIR, 'cron', 'jobs.json')
 const HERMES_CONFIG_FILE = join(HERMES_PROFILE_DIR, 'config.yaml')
+const OBSIDIAN_PROJECTS_DIR = '/Users/gabi/Documents/Warung Kerja 1.0/03_Active_Projects'
+// Subfolders to skip when scanning Obsidian projects
+const OBSIDIAN_SKIP_DIRS = new Set(['_archive', '_work queue', '_registry', '_work_queue'])
 
 const now = new Date()
 const nowISO = now.toISOString()
@@ -69,9 +73,13 @@ function collectGitSignals(repoPath) {
       const parts = line.split(SEP)
       const [hash, committed_at, author] = parts
       const subject = parts.slice(3).join(SEP)
+      // Normalize git date (%ai = "ISO 8601") to UTC ISO 8601 string.
+      const rawDate = (committed_at ?? '').trim()
+      let dateISO = rawDate
+      try { dateISO = new Date(rawDate).toISOString() } catch (_) {}
       return {
         hash: (hash ?? '').trim().slice(0, 8),
-        committed_at: (committed_at ?? '').trim(),
+        committed_at: dateISO,
         author: (author ?? '').trim(),
         subject: (subject ?? '').trim(),
       }
@@ -267,16 +275,38 @@ function collectSourceHealth() {
     synced_at: nowISO,
   })
 
+  // Obsidian active projects folder (real check — project adapter now connected)
+  const obsidianProjExists = existsSync(OBSIDIAN_PROJECTS_DIR)
+  let obsidianProjModifiedAt = null
+  let obsidianProjAgeHours = null
+  if (obsidianProjExists) {
+    const stat = statSync(OBSIDIAN_PROJECTS_DIR)
+    obsidianProjModifiedAt = new Date(stat.mtimeMs).toISOString()
+    obsidianProjAgeHours = parseFloat(((now.getTime() - stat.mtimeMs) / (1000 * 60 * 60)).toFixed(2))
+  }
   rows.push({
-    id: 'sh-obsidian-vault',
-    label: 'Obsidian vault (wiki/projects)',
+    id: 'sh-obsidian-projects',
+    label: 'Obsidian active projects folder',
+    source_type: 'filesystem',
+    exists: obsidianProjExists,
+    readable: obsidianProjExists,
+    modified_at: obsidianProjModifiedAt,
+    age_hours: obsidianProjAgeHours,
+    status: obsidianProjExists ? 'ok' : 'warn',
+    error: obsidianProjExists ? null : 'Obsidian projects folder not found at expected path',
+    synced_at: nowISO,
+  })
+
+  rows.push({
+    id: 'sh-obsidian-wiki',
+    label: 'Obsidian vault (wiki ingestion)',
     source_type: 'adapter',
     exists: false,
     readable: false,
     modified_at: null,
     age_hours: null,
     status: 'bad',
-    error: 'Obsidian adapter not connected — wiki and project tracker adapter pending',
+    error: 'Wiki ingestion adapter not connected — approved folders and scope not yet decided with Raz',
     synced_at: nowISO,
   })
 
@@ -335,12 +365,210 @@ function collectCronHealth() {
   }
 }
 
+// ---- Obsidian status map ----
+// Maps Obsidian frontmatter status values to CanonicalProject status strings.
+const OBSIDIAN_STATUS_MAP = {
+  'active': 'active',
+  'phase-2-ready': 'review',
+  'review': 'review',
+  'moving': 'moving',
+  'paused': 'paused',
+  'blocked': 'blocked',
+  'done': 'completed',
+  'completed': 'completed',
+  'not-started': 'planned',
+  'planned': 'planned',
+  'archived': 'archived',
+}
+
+// Read only the YAML frontmatter block from a markdown file.
+// Safety: stops as soon as the closing --- delimiter is reached or after 60 lines.
+// This avoids loading note body content into memory.
+function readFrontmatterBlock(filePath) {
+  let fd = null
+  try {
+    fd = openSync(filePath, 'r')
+    const buffer = Buffer.alloc(1)
+    const lines = []
+    let current = ''
+    let bytesRead = 0
+
+    while (lines.length < 60 && (bytesRead = readSync(fd, buffer, 0, 1, null)) > 0) {
+      const char = buffer.toString('utf8', 0, bytesRead)
+      if (char === '\n') {
+        const line = current.replace(/\r$/, '')
+        lines.push(line)
+        current = ''
+
+        if (lines.length === 1 && line.trim() !== '---') return null
+        if (lines.length > 1 && line.trim() === '---') break
+      } else {
+        current += char
+      }
+    }
+
+    if (current && lines.length < 60) lines.push(current.replace(/\r$/, ''))
+    if (lines[0]?.trim() !== '---') return null
+    return lines.join('\n')
+  } catch (_) {
+    return null
+  } finally {
+    if (fd !== null) {
+      try { closeSync(fd) } catch (_) {}
+    }
+  }
+}
+
+function parseFrontmatter(text) {
+  if (!text) return null
+  const lines = text.split('\n')
+  if (lines[0]?.trim() !== '---') return null
+  const fields = {}
+  for (let i = 1; i < lines.length && i < 60; i++) {
+    if (lines[i]?.trim() === '---') break
+    const m = lines[i].match(/^([a-zA-Z_]\w*)\s*:\s*(.*)$/)
+    if (m) fields[m[1].trim()] = m[2].trim().replace(/^['"]|['"]$/g, '')
+  }
+  return Object.keys(fields).length > 0 ? fields : null
+}
+
+// ---- Obsidian project tracker adapter ----
+// Scans ~/Documents/Warung Kerja 1.0/03_Active_Projects/ for project folders.
+// For each folder, reads ONLY the YAML frontmatter of a Project Home markdown file.
+// Does NOT read body content, agent diaries, journals, or credential stores.
+// Folder paths are redacted — never included in snapshot output.
+function collectObsidianProjects() {
+  try {
+    if (!existsSync(OBSIDIAN_PROJECTS_DIR)) {
+      return { ok: false, error: 'Obsidian projects directory not found', projects: [] }
+    }
+
+    const entries = readdirSync(OBSIDIAN_PROJECTS_DIR, { withFileTypes: true })
+    const projectDirs = entries
+      .filter(e => e.isDirectory() && !OBSIDIAN_SKIP_DIRS.has(e.name.toLowerCase()) && !e.name.startsWith('_'))
+      .sort((a, b) => a.name.localeCompare(b.name))
+
+    const projects = []
+
+    for (const dirEntry of projectDirs) {
+      const dirPath = join(OBSIDIAN_PROJECTS_DIR, dirEntry.name)
+
+      // Only look at .md files in the root of the project folder — skip subdirectories
+      let mdFiles = []
+      try {
+        mdFiles = readdirSync(dirPath, { withFileTypes: true })
+          .filter(f => f.isFile() && f.name.endsWith('.md') && !f.name.startsWith('.'))
+          .map(f => f.name)
+          .sort()
+      } catch (_) {}
+
+      // Prefer a file named "Project Home"; otherwise use the first .md file
+      const homeFileName = mdFiles.find(f => f.toLowerCase().includes('project home')) ?? mdFiles[0] ?? null
+
+      let frontmatter = null
+      let fileModifiedAt = null
+
+      if (homeFileName) {
+        const filePath = join(dirPath, homeFileName)
+        try {
+          const stat = statSync(filePath)
+          fileModifiedAt = new Date(stat.mtimeMs).toISOString()
+          const frontmatterText = readFrontmatterBlock(filePath)
+          frontmatter = parseFrontmatter(frontmatterText)
+        } catch (_) {}
+      }
+
+      // Derive stable ID from folder name
+      const id = dirEntry.name.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+
+      const rawStatus = frontmatter?.status ?? null
+      const status = rawStatus ? (OBSIDIAN_STATUS_MAP[rawStatus] ?? rawStatus) : 'unknown'
+
+      // Safe date parsing for frontmatter date strings (YYYY-MM-DD format)
+      function safeDateISO(dateStr) {
+        if (!dateStr) return null
+        try {
+          const d = new Date(dateStr + 'T00:00:00Z')
+          return isNaN(d.getTime()) ? null : d.toISOString()
+        } catch (_) { return null }
+      }
+
+      projects.push({
+        id,
+        name: frontmatter?.project ?? dirEntry.name.replace(/[_-]+/g, ' '),
+        owner: frontmatter?.owner ?? null,
+        team: null,
+        status,
+        priority: null,
+        current_phase: null,
+        next_step: null,
+        project_kind: null,
+        parent_project_id: null,
+        visibility: 'private',
+        source_root: null,
+        folder_path: null,   // Redacted — do not expose Obsidian vault paths
+        folder_status: 'obsidian',
+        registry_status: frontmatter ? 'registered' : 'unstructured',
+        source_updated_at: safeDateISO(frontmatter?.updated) ?? fileModifiedAt,
+        synced_at: nowISO,
+        blocker: null,
+        last_movement_at: safeDateISO(frontmatter?.updated) ?? fileModifiedAt,
+      })
+    }
+
+    return { ok: true, projects }
+  } catch (err) {
+    return { ok: false, error: String(err?.message ?? err), projects: [] }
+  }
+}
+
 // ---- Run all collectors ----
-const gitResult    = collectGitSignals(ROOT)
-const modelHealth  = collectModelHealth()
-const sourceHealth = collectSourceHealth()
-const cronJobs     = collectCronHealth()
-const durationMs   = Date.now() - startMs
+const gitResult       = collectGitSignals(ROOT)
+const modelHealth     = collectModelHealth()
+const sourceHealth    = collectSourceHealth()
+const cronJobs        = collectCronHealth()
+const obsidianResult  = collectObsidianProjects()
+const durationMs      = Date.now() - startMs
+
+// Enrich the warung-os project entry with git-derived timing (real local data).
+const enrichedProjects = obsidianResult.projects.map(p => {
+  if (p.id === 'warung-os' && gitResult.ok) {
+    return {
+      ...p,
+      source_root: 'warung-os/',
+      source_updated_at: gitResult.signal.latest_commit_at ?? p.source_updated_at,
+      last_movement_at: gitResult.signal.latest_commit_at ?? p.last_movement_at,
+    }
+  }
+  return p
+})
+
+// Fall back to the stub warung-os entry if Obsidian collection failed
+const projectItems = obsidianResult.ok && enrichedProjects.length > 0
+  ? enrichedProjects
+  : [{
+      id: 'warung-os',
+      name: 'Warung OS',
+      owner: 'Raz',
+      team: ['Mia', 'Gabs', 'Baro'],
+      status: 'review',
+      priority: 'p0',
+      current_phase: 'Phase 2 — Data Adapters',
+      next_step: 'Task 7: Obsidian wiki adapter or TickTick board adapter',
+      project_kind: 'tooling',
+      parent_project_id: null,
+      visibility: 'private',
+      source_root: 'warung-os/',
+      folder_path: null,   // Redacted — do not expose Obsidian vault or local repo paths
+      folder_status: 'active',
+      registry_status: 'registered',
+      source_updated_at: gitResult.ok ? (gitResult.signal.latest_commit_at ?? nowISO) : nowISO,
+      synced_at: nowISO,
+      blocker: null,
+      last_movement_at: gitResult.ok ? (gitResult.signal.latest_commit_at ?? nowISO) : nowISO,
+    }]
 
 const adapterWarnings = {
   workspace: gitResult.ok
@@ -350,8 +578,10 @@ const adapterWarnings = {
   provider_health: 'Model/provider rows are sanitized config metadata only — no live API health or latency check performed.',
   token_usage: 'Agent/model/tool token usage adapter not connected — arrays are empty until Hermes log adapter is wired in.',
   agent_status: 'Team member status is static placeholder — live Hermes agent status adapter not yet connected.',
-  projects: 'Obsidian project adapter not connected — using warung-os stub entry only.',
-  wiki: 'Obsidian wiki adapter not connected — entries array is empty.',
+  obsidian_projects: obsidianResult.ok
+    ? `Obsidian project frontmatter collected from 03_Active_Projects/. ${obsidianResult.projects.length} folder(s) found. Structured projects: ${obsidianResult.projects.filter(p => p.registry_status === 'registered').length}. Folder paths redacted. Body content not read.`
+    : `Obsidian project adapter failed: ${obsidianResult.error}`,
+  wiki: 'Obsidian wiki ingestion adapter not connected — approved folders and scope not yet decided with Raz.',
 }
 
 const warnings = [
@@ -360,6 +590,9 @@ const warnings = [
   gitResult.ok
     ? `Workspace git signals are real local data from warung-os repo (branch: ${gitResult.signal.branch}).`
     : `Workspace git signals unavailable — git collection failed: ${gitResult.error}`,
+  obsidianResult.ok
+    ? `Obsidian project metadata collected from 03_Active_Projects/ (frontmatter only — body content not read). ${obsidianResult.projects.length} project(s) found.`
+    : `Obsidian project adapter failed: ${obsidianResult.error}`,
 ]
 
 const snapshot = {
@@ -383,15 +616,15 @@ const snapshot = {
         id: 'db-snap-1',
         type: 'info',
         title: 'Snapshot generated',
-        body: `Snapshot generated at ${nowISO}. Git signals are real local data. Token usage, wiki, and dot delegation are unavailable until adapters are connected.`,
+        body: `Snapshot generated at ${nowISO}. Git signals, Hermes cron metadata, and Obsidian project metadata are real local data. Token usage, wiki, and dot delegation remain unavailable until adapters are connected.`,
         time: now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }),
         project: 'warung-os',
       },
       {
         id: 'db-snap-2',
         type: 'next',
-        title: 'Next: Hermes token adapter (Task 6)',
-        body: 'Wire Hermes-side token/usage log reader to populate real Usage tab data. Then Obsidian adapter for wiki and project tracker.',
+        title: 'Next: TickTick board adapter (Task 7)',
+        body: 'Wire Warung OS TickTick board into snapshot to surface kanban task state. Then decide wiki ingestion scope with Raz (Task 8).',
         time: 'Phase 2',
         project: 'warung-os',
       },
@@ -400,29 +633,7 @@ const snapshot = {
   },
 
   projects: {
-    items: [
-      {
-        id: 'warung-os',
-        name: 'Warung OS',
-        owner: 'Raz',
-        team: ['Mia', 'Gabs', 'Baro'],
-        status: 'review',
-        priority: 'p0',
-        current_phase: 'Phase 2 — Data Adapters',
-        next_step: 'Task 6: Obsidian project tracker adapter',
-        project_kind: 'tooling',
-        parent_project_id: null,
-        visibility: 'private',
-        source_root: 'warung-os/',
-        folder_path: ROOT,
-        folder_status: 'active',
-        registry_status: 'registered',
-        source_updated_at: gitResult.ok ? (gitResult.signal.latest_commit_at ?? nowISO) : nowISO,
-        synced_at: nowISO,
-        blocker: null,
-        last_movement_at: gitResult.ok ? (gitResult.signal.latest_commit_at ?? nowISO) : nowISO,
-      },
-    ],
+    items: projectItems,
     // Static placeholder — live agent status adapter not yet connected.
     team_members: [
       {
@@ -445,7 +656,7 @@ const snapshot = {
         parent_agent: 'baro',
         synced_at: nowISO,
         status: 'active',
-        current_task: 'Phase 2 Task 5 — Hermes cron/provider health adapter',
+        current_task: 'Phase 2 Task 6 — Obsidian project tracker adapter',
       },
       {
         id: 'gabs',
@@ -493,12 +704,13 @@ const snapshot = {
         trigger: 'manual',
         source_host: 'local',
         summary: {
-          type: 'hermes-cron-provider-adapter',
+          type: 'hermes-cron-provider-obsidian-projects-adapter',
           git_signals: gitResult.ok ? 'ok' : 'failed',
           cron_adapter: cronJobs.some(job => job.status === 'bad') ? 'failed' : 'ok',
           provider_health: modelHealth.some(model => model.status === 'bad') ? 'failed' : 'config_only',
           token_adapter: 'unavailable',
-          obsidian_adapter: 'unavailable',
+          obsidian_projects_adapter: obsidianResult.ok ? `ok (${obsidianResult.projects.length} projects)` : `failed: ${obsidianResult.error}`,
+          obsidian_wiki_adapter: 'unavailable',
           duration_ms: durationMs,
         },
         error: gitResult.ok ? null : `git_signals_failed: ${gitResult.error}`,
@@ -529,6 +741,8 @@ console.log(`[warung-os] Git signals:    ${gitResult.ok ? `ok  (branch: ${gitRes
 console.log(`[warung-os] Cron jobs:      ${cronJobs.length} Hermes profile job(s) recorded (prompts/delivery targets omitted)`)
 console.log(`[warung-os] Model health:   ${modelHealth.length} config row(s) listed (no live health check)`)
 console.log(`[warung-os] Source health:  ${sourceHealth.filter(s => s.status === 'ok').length} ok / ${sourceHealth.length} total`)
+console.log(`[warung-os] Obsidian projects: ${obsidianResult.ok ? `ok  (${obsidianResult.projects.length} folder(s), ${obsidianResult.projects.filter(p => p.registry_status === 'registered').length} with frontmatter)` : `FAILED: ${obsidianResult.error}`}`)
+console.log(`[warung-os] Projects in snapshot: ${projectItems.length}`)
 console.log(`[warung-os] Duration:       ${durationMs}ms`)
 console.log(`[warung-os] Warnings:`)
 warnings.forEach(w => console.log(`  - ${w}`))
