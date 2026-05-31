@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.claude-runs/
+.claude-build-run*.json
+.claude-build-run*.stderr
+.DS_Store
+.env
+.env.*
+!.env.example

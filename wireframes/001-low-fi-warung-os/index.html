@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Warung OS — Low Fidelity Wireframe</title>
+  <style>
+    :root {
+      --bg: #0d0f13;
+      --gutter: #080a0d;
+      --panel: #151820;
+      --panel-2: #1d222b;
+      --panel-3: #252b36;
+      --ink: #f8efe6;
+      --soft: #d7cec4;
+      --muted: #918a82;
+      --line: #303743;
+      --line-strong: #515966;
+      --signal: #f17450;
+      --ok: #72aa72;
+      --warn: #cfa85d;
+      --bad: #d96f63;
+      --mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { background: var(--bg); color: var(--ink); font-family: var(--sans); }
+    body { margin: 0; min-height: 100vh; background: var(--bg); }
+    button, input { font: inherit; }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 244px 1fr 310px;
+      grid-template-rows: 52px 1fr;
+      gap: 1px;
+      background: var(--gutter);
+    }
+
+    .topbar, .sidebar, .main, .rail { background: var(--bg); }
+    .topbar {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 244px 1fr 310px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand, .top-status, .user-block {
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      border-right: 1px solid var(--line);
+      min-width: 0;
+    }
+    .user-block { border-right: 0; justify-content: space-between; }
+    .brand-title { font-weight: 700; letter-spacing: -0.05em; font-size: 18px; }
+    .brand-mark { color: var(--signal); margin-right: 10px; font-family: var(--mono); }
+    .mono { font-family: var(--mono); text-transform: uppercase; letter-spacing: .06em; font-size: 10px; color: var(--muted); }
+    .top-status { gap: 18px; color: var(--soft); font-family: var(--mono); font-size: 11px; }
+    .status-dot { width: 7px; height: 7px; display: inline-block; background: var(--ok); margin-right: 7px; }
+    .status-dot.warn { background: var(--warn); }
+    .status-dot.bad { background: var(--bad); }
+
+    .sidebar { padding: 24px 18px; border-right: 1px solid var(--line); }
+    .nav-label { margin-bottom: 12px; }
+    .nav { display: grid; gap: 8px; }
+    .nav button {
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      color: var(--soft);
+      border: 1px solid var(--line);
+      padding: 13px 14px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .nav button:hover { border-color: var(--line-strong); background: var(--panel); }
+    .nav button.active { color: var(--ink); border-color: var(--signal); background: #211a18; }
+    .nav .count { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+
+    .side-section { margin-top: 28px; border-top: 1px solid var(--line); padding-top: 18px; }
+    .side-card { border: 1px solid var(--line); padding: 14px; background: var(--panel); margin-top: 10px; }
+    .side-card strong { display: block; font-size: 13px; margin-bottom: 6px; }
+    .side-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+
+    .main { padding: 30px; overflow: auto; }
+    .rail { border-left: 1px solid var(--line); padding: 24px 20px; overflow: auto; }
+
+    .page { display: none; max-width: 1180px; margin: 0 auto; }
+    .page.active { display: block; }
+    .page-head {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: end;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(44px, 6vw, 86px);
+      letter-spacing: -0.075em;
+      line-height: .92;
+      font-weight: 750;
+    }
+    .dek { margin: 14px 0 0; color: var(--soft); font-size: 17px; line-height: 1.5; max-width: 720px; }
+    .actions { display: flex; gap: 8px; align-items: center; }
+    .btn {
+      border: 1px solid var(--line-strong);
+      background: var(--panel-2);
+      color: var(--ink);
+      padding: 11px 13px;
+      font-family: var(--mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      cursor: pointer;
+    }
+    .btn.primary { background: var(--signal); border-color: var(--signal); color: #16100d; }
+    .btn:hover { filter: brightness(1.1); }
+
+    .grid { display: grid; gap: 1px; background: var(--gutter); border: 1px solid var(--line); }
+    .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid.cols-2 { grid-template-columns: 1.25fr .75fr; }
+    .grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+    .panel { background: var(--panel); padding: 18px; min-height: 120px; }
+    .panel.alt { background: var(--panel-2); }
+    .panel h2, .panel h3 { margin: 0 0 12px; font-size: 18px; letter-spacing: -0.035em; }
+    .panel p, .panel li { color: var(--soft); font-size: 13px; line-height: 1.48; }
+    .panel ul { padding-left: 17px; margin: 0; }
+    .metric-value { font-size: 42px; line-height: 1; letter-spacing: -0.06em; margin: 10px 0 4px; }
+    .metric-note { color: var(--muted); font-size: 12px; }
+
+    .brief-layout { display: grid; grid-template-columns: 1fr 370px; gap: 1px; background: var(--gutter); border: 1px solid var(--line); }
+    .recap-list { display: grid; gap: 10px; }
+    .recap-row { display: grid; grid-template-columns: 86px 1fr auto; gap: 14px; align-items: start; padding: 12px 0; border-top: 1px solid var(--line); }
+    .recap-row:first-child { border-top: 0; }
+    .tag { font-family: var(--mono); text-transform: uppercase; font-size: 9px; letter-spacing: .06em; color: var(--muted); border: 1px solid var(--line); padding: 5px 6px; width: max-content; }
+    .tag.signal { color: var(--signal); border-color: var(--signal); }
+    .tag.ok { color: var(--ok); border-color: var(--ok); }
+    .tag.warn { color: var(--warn); border-color: var(--warn); }
+
+    .timeline { display: grid; gap: 8px; }
+    .tick { display: grid; grid-template-columns: 56px 1fr; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+    .bar { height: 10px; background: var(--panel-3); position: relative; margin-top: 8px; }
+    .bar span { display: block; height: 100%; background: var(--signal); }
+    .bar.ok span { background: var(--ok); }
+    .bar.warn span { background: var(--warn); }
+
+    .project-list { display: grid; gap: 1px; background: var(--gutter); border: 1px solid var(--line); }
+    .project-row { display: grid; grid-template-columns: 1.1fr .75fr .75fr 120px; gap: 1px; background: var(--gutter); }
+    .project-row > div { background: var(--panel); padding: 15px; min-height: 78px; }
+    .project-row.header > div { min-height: auto; padding: 10px 15px; background: #101319; }
+
+    .approval-box { border: 1px dashed var(--line-strong); padding: 14px; margin-top: 12px; background: #11151c; }
+    .approval-flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--gutter); margin-top: 12px; }
+    .approval-flow div { background: var(--panel-2); padding: 12px; min-height: 74px; }
+
+    .ops-chart { height: 210px; border: 1px solid var(--line); background:
+      linear-gradient(to bottom, transparent 24%, var(--line) 25%, transparent 26%, transparent 49%, var(--line) 50%, transparent 51%, transparent 74%, var(--line) 75%, transparent 76%),
+      var(--panel);
+      display: flex; align-items: end; gap: 8px; padding: 18px;
+    }
+    .col { flex: 1; background: var(--panel-3); min-height: 22px; display: flex; align-items: end; }
+    .col span { width: 100%; background: var(--signal); display: block; }
+
+    .search-box { display: grid; grid-template-columns: 1fr auto; border: 1px solid var(--line-strong); background: var(--panel); }
+    .search-box input { background: transparent; border: 0; color: var(--ink); padding: 16px; outline: none; }
+    .search-box button { border: 0; border-left: 1px solid var(--line); background: var(--panel-2); color: var(--ink); padding: 0 18px; cursor: pointer; }
+    .wiki-results { margin-top: 18px; display: grid; gap: 1px; background: var(--gutter); border: 1px solid var(--line); }
+    .wiki-row { background: var(--panel); padding: 16px; display: grid; grid-template-columns: 120px 1fr 120px; gap: 16px; }
+
+    .rail h3 { margin: 0 0 16px; font-size: 16px; letter-spacing: -0.04em; }
+    .rail-block { border: 1px solid var(--line); padding: 14px; margin-bottom: 12px; background: var(--panel); }
+    .rail-number { font-size: 36px; letter-spacing: -0.06em; line-height: 1; margin: 8px 0; }
+    .rail-list { display: grid; gap: 1px; background: var(--gutter); border: 1px solid var(--line); }
+    .rail-item { background: var(--panel); padding: 12px; }
+    .rail-item p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
+
+    .mobile-strip { display: none; }
+
+    @media (max-width: 1050px) {
+      .shell { grid-template-columns: 1fr; grid-template-rows: 52px auto 1fr auto; }
+      .topbar { grid-template-columns: 1fr; }
+      .top-status, .user-block { display: none; }
+      .sidebar { border-right: 0; border-bottom: 1px solid var(--line); padding: 14px; }
+      .nav { grid-template-columns: repeat(4, 1fr); }
+      .side-section { display: none; }
+      .main { padding: 18px; }
+      .rail { border-left: 0; border-top: 1px solid var(--line); }
+      .brief-layout, .grid.cols-2 { grid-template-columns: 1fr; }
+      .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr 1fr; }
+      .project-row { grid-template-columns: 1fr; }
+      .project-row.header { display: none; }
+      .wiki-row { grid-template-columns: 1fr; gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">+</span><span class="brand-title">Warung OS</span></div>
+      <div class="top-status">
+        <span><span class="status-dot"></span>Gateway online</span>
+        <span><span class="status-dot warn"></span>2 approvals waiting</span>
+        <span>Last snapshot: 06:48</span>
+        <span>//// daily operating surface</span>
+      </div>
+      <div class="user-block"><span class="mono">Raz / Owner View</span><span class="mono">MVP Wireframe</span></div>
+    </header>
+
+    <aside class="sidebar">
+      <div class="mono nav-label">Primary Navigation</div>
+      <nav class="nav" aria-label="Warung OS pages">
+        <button class="active" data-page="home">Home <span class="count">01</span></button>
+        <button data-page="projects">Active Projects <span class="count">07</span></button>
+        <button data-page="operations">Operations <span class="count">LIVE</span></button>
+        <button data-page="wiki">Wiki <span class="count">124</span></button>
+      </nav>
+
+      <div class="side-section">
+        <div class="mono">MVP Shape</div>
+        <div class="side-card">
+          <strong>Phase 1 focus</strong>
+          <p>Daily Brief first, then project list, then operational summaries. Actions stay minimal until audit trail is designed.</p>
+        </div>
+        <div class="side-card">
+          <strong>Design rule</strong>
+          <p>Low fidelity now: hierarchy, navigation, approval flow. Gabs applies visual direction after Raz approves structure.</p>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="page active" id="home">
+        <div class="page-head">
+          <div>
+            <div class="mono">Home / Daily Brief</div>
+            <h1>Good morning Raz.</h1>
+            <p class="dek">Here’s the quick recap of what happened inside Warung Kerja over the last 24 hours, what needs attention, and what should happen next.</p>
+          </div>
+          <div class="actions">
+            <button class="btn">View source notes</button>
+            <button class="btn primary">Approve focus</button>
+          </div>
+        </div>
+
+        <div class="grid cols-4" style="margin-bottom:24px">
+          <div class="panel"><div class="mono">Projects moved</div><div class="metric-value">4</div><div class="metric-note">Warung OS, BofB, Template Factory, Etsy Ops</div></div>
+          <div class="panel"><div class="mono">Runs succeeded</div><div class="metric-value">11</div><div class="metric-note">No intervention needed</div></div>
+          <div class="panel"><div class="mono">Blocked</div><div class="metric-value">2</div><div class="metric-note">Claude build auth context + approval queue</div></div>
+          <div class="panel"><div class="mono">Raz attention</div><div class="metric-value" style="color:var(--signal)">3</div><div class="metric-note">Review wireframe, approve kanban, pick design path</div></div>
+        </div>
+
+        <div class="brief-layout">
+          <div class="panel">
+            <div class="mono">Last 24h recap</div>
+            <div class="recap-list">
+              <div class="recap-row"><span class="tag ok">Win</span><p>Warung OS source docs were organized in Obsidian and the top-level navigation was narrowed to four pages.</p><span class="mono">06:20</span></div>
+              <div class="recap-row"><span class="tag signal">Needs Raz</span><p>Wireframe structure needs approval before Claude Code receives the implementation prompt.</p><span class="mono">Now</span></div>
+              <div class="recap-row"><span class="tag warn">Blocked</span><p>Project-specific approval modules are intentionally deferred until the base project list is readable.</p><span class="mono">Phase 2</span></div>
+              <div class="recap-row"><span class="tag">Next</span><p>Create static low-fidelity views for Home, Active Projects, Operations, and Wiki.</p><span class="mono">Today</span></div>
+            </div>
+          </div>
+          <div class="panel alt">
+            <div class="mono">Today’s suggested focus</div>
+            <h2>Approve the shell before we build the engine.</h2>
+            <p>The MVP should make morning review easier than Telegram: one screen, clear priorities, obvious blockers, and a short approval queue.</p>
+            <div class="approval-box">
+              <div class="mono">Primary decision</div>
+              <p>Does this four-page navigation feel right as Warung OS v0?</p>
+              <button class="btn primary" style="margin-top:10px">Mark structure approved</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="projects">
+        <div class="page-head">
+          <div>
+            <div class="mono">Active Projects</div>
+            <h1>Project command list.</h1>
+            <p class="dek">A readable index of current Warung Kerja projects, sourced first from the Obsidian masterlist, then expanded into project-specific approval flows.</p>
+          </div>
+          <div class="actions"><button class="btn">Sync Obsidian</button><button class="btn primary">New review queue</button></div>
+        </div>
+
+        <div class="project-list">
+          <div class="project-row header"><div class="mono">Project</div><div class="mono">Stage</div><div class="mono">Needs</div><div class="mono">Status</div></div>
+          <div class="project-row"><div><h3>Warung OS</h3><p>Command centre for agents, briefs, approvals and project state.</p></div><div><span class="tag signal">Wireframe</span><p>Pre-build</p></div><div><p>Raz approval on shell + MVP boundaries.</p></div><div><span class="tag warn">Review</span></div></div>
+          <div class="project-row"><div><h3>Template Factory</h3><p>Printable/product generation pipeline and Etsy upload prep.</p></div><div><span class="tag">Production</span><p>Phase planning</p></div><div><p>Approval queue for upload-ready assets and listing copy.</p></div><div><span class="tag">Moving</span></div></div>
+          <div class="project-row"><div><h3>Band of Barkers</h3><p>Experimental dog poster/design playground.</p></div><div><span class="tag">Design</span><p>Gabs output</p></div><div><p>Approve / decline / request changes on design directions.</p></div><div><span class="tag ok">Active</span></div></div>
+        </div>
+
+        <div class="grid cols-2" style="margin-top:24px">
+          <div class="panel">
+            <div class="mono">Project detail / approval module placeholder</div>
+            <h2>Band of Barkers review flow</h2>
+            <p>When a project has reviewable assets, the detail page exposes a focused module instead of forcing Raz into raw files or Telegram threads.</p>
+            <div class="approval-flow">
+              <div><span class="tag">1</span><p>Preview design output</p></div>
+              <div><span class="tag">2</span><p>Approve / decline / change request</p></div>
+              <div><span class="tag">3</span><p>Write decision to Obsidian / task log</p></div>
+              <div><span class="tag">4</span><p>Notify assigned agent</p></div>
+            </div>
+          </div>
+          <div class="panel alt">
+            <div class="mono">Phase boundary</div>
+            <h2>Do not overbuild this first.</h2>
+            <p>Phase 1 can be a clean list + status readout. Project-specific approvals become Phase 2 once the core OS shell works.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="operations">
+        <div class="page-head">
+          <div>
+            <div class="mono">Operations</div>
+            <h1>System pulse.</h1>
+            <p class="dek">This is where Mission Control Online functionality moves: token usage, cron status, sync bridge health, tool usage, and provider/fallback visibility.</p>
+          </div>
+          <div class="actions"><button class="btn">Manual refresh</button><button class="btn primary">Open run log</button></div>
+        </div>
+
+        <div class="grid cols-3" style="margin-bottom:24px">
+          <div class="panel"><div class="mono">Cron health</div><div class="metric-value">18/20</div><div class="metric-note">Two jobs need inspection</div></div>
+          <div class="panel"><div class="mono">Token burn</div><div class="metric-value">72%</div><div class="metric-note">Within expected daily range</div></div>
+          <div class="panel"><div class="mono">Delegation</div><div class="metric-value">OK</div><div class="metric-note">Claude Code path available via real HOME</div></div>
+        </div>
+
+        <div class="grid cols-2">
+          <div class="panel">
+            <div class="mono">Model token burn / placeholder chart</div>
+            <div class="ops-chart">
+              <div class="col"><span style="height:42%"></span></div><div class="col"><span style="height:58%"></span></div><div class="col"><span style="height:35%"></span></div><div class="col"><span style="height:74%"></span></div><div class="col"><span style="height:62%"></span></div><div class="col"><span style="height:88%"></span></div><div class="col"><span style="height:51%"></span></div>
+            </div>
+          </div>
+          <div class="panel alt">
+            <div class="mono">Automation timeline digest</div>
+            <div class="timeline">
+              <div class="tick"><span class="mono">06:00</span><p>Morning brief generated and delivered to Telegram.</p></div>
+              <div class="tick"><span class="mono">06:14</span><p>Obsidian sync completed. No merge conflicts reported.</p></div>
+              <div class="tick"><span class="mono">06:42</span><p>Warung OS wireframe task created. Awaiting review.</p></div>
+              <div class="tick"><span class="mono">Next</span><p>Snapshot export and dashboard refresh.</p></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="wiki">
+        <div class="page-head">
+          <div>
+            <div class="mono">Wiki</div>
+            <h1>Find the work memory.</h1>
+            <p class="dek">Browse and search agent diaries, 1% Journal entries, and approved work notes. Phase 2 adds an AI question-answer layer over these sources.</p>
+          </div>
+          <div class="actions"><button class="btn">Browse all</button><button class="btn primary">Ask later</button></div>
+        </div>
+
+        <div class="search-box">
+          <input value="What did we do about Template Factory last week?" aria-label="Wiki search example" />
+          <button>Search</button>
+        </div>
+
+        <div class="wiki-results">
+          <div class="wiki-row"><span class="mono">Agent Diary</span><div><h3>Template Factory production queue notes</h3><p>Mentions upload-ready assets, Canva sizing, and Etsy listing copy workflow.</p></div><span class="tag">Gabs</span></div>
+          <div class="wiki-row"><span class="mono">1% Journal</span><div><h3>Passive engine direction</h3><p>Raz’s notes on passive income focus and production pipeline constraints.</p></div><span class="tag">Raz</span></div>
+          <div class="wiki-row"><span class="mono">Project Note</span><div><h3>Warung OS UX Sitemap</h3><p>Defines the four-page structure and the wireframe requirements.</p></div><span class="tag signal">Current</span></div>
+        </div>
+      </section>
+    </main>
+
+    <aside class="rail">
+      <h3>Decision rail</h3>
+      <div class="rail-block">
+        <div class="mono">Current screen question</div>
+        <div class="rail-number">01</div>
+        <p style="color:var(--soft); line-height:1.45">Does Warung OS start with a human Daily Brief, not a technical dashboard?</p>
+      </div>
+      <div class="rail-block">
+        <div class="mono">Approval queue</div>
+        <div class="bar warn"><span style="width:66%"></span></div>
+        <p style="color:var(--muted); font-size:12px">2 structural decisions, 1 build prompt decision.</p>
+      </div>
+      <div class="rail-list">
+        <div class="rail-item"><span class="tag signal">Raz</span><p>Approve or adjust top-level navigation.</p></div>
+        <div class="rail-item"><span class="tag">Mia</span><p>Translate approved wireframe into PRD + Claude Code prompt.</p></div>
+        <div class="rail-item"><span class="tag">Gabs</span><p>Create visual direction board after layout approval.</p></div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    const buttons = document.querySelectorAll('.nav button');
+    const pages = document.querySelectorAll('.page');
+    const railQuestion = document.querySelector('.rail-block p');
+    const questions = {
+      home: 'Does Warung OS start with a human Daily Brief, not a technical dashboard?',
+      projects: 'Is the project list enough for Phase 1 before approval modules?',
+      operations: 'Should Operations stay secondary unless something breaks?',
+      wiki: 'Is basic search/browse enough before AI semantic search?'
+    };
+    buttons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        buttons.forEach(b => b.classList.remove('active'));
+        pages.forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.page).classList.add('active');
+        railQuestion.textContent = questions[btn.dataset.page];
+      });
+    });
+  </script>
+</body>
+</html>
