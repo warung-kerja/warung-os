@@ -7,3 +7,7 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Generated local snapshots — local-only, never commit
+# Commit public/snapshots/demo.json only if explicitly marked is_demo: true
+public/snapshots/latest.json

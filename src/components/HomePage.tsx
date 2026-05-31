@@ -1,4 +1,4 @@
-import { dailyBriefFixtures, approvalFixtures, projectFixtures } from '../data/fixtures'
+import { useWarungData } from '../data/dataSource'
 import type { DailyBriefItem } from '../types/warung-os'
 
 function tagClass(type: DailyBriefItem['type']): string {
@@ -22,11 +22,13 @@ function tagLabel(type: DailyBriefItem['type']): string {
 }
 
 export default function HomePage() {
-  const movedProjects = projectFixtures.filter(p => p.status === 'moving' || p.status === 'active').length
+  const { data } = useWarungData()
+  const { projects, approvals, dailyBrief } = data
+  const movedProjects = projects.filter(p => p.status === 'moving' || p.status === 'active').length
   const runsSucceeded = 11
   const blocked = 2
-  const razAttention = approvalFixtures.filter(a => a.status === 'pending').length
-  const primaryFocus = dailyBriefFixtures.find(d => d.type === 'needs_raz')
+  const razAttention = approvals.filter(a => a.status === 'pending').length
+  const primaryFocus = dailyBrief.find(d => d.type === 'needs_raz')
 
   return (
     <div className="page">
@@ -71,7 +73,7 @@ export default function HomePage() {
       <div className="brief-layout">
         <div className="panel" style={{ minHeight: 0 }}>
           <div className="mono" style={{ padding: '0 0 10px' }}>Last 24h recap</div>
-          {dailyBriefFixtures.map(item => (
+          {dailyBrief.map(item => (
             <div key={item.id} className="recap-row">
               <span className={tagClass(item.type)}>{tagLabel(item.type)}</span>
               <p>{item.body}</p>
@@ -101,7 +103,7 @@ export default function HomePage() {
 
           <div style={{ marginTop: 16 }}>
             <div className="mono" style={{ marginBottom: 8 }}>Approval queue</div>
-            {approvalFixtures.map(ap => (
+            {approvals.map(ap => (
               <div key={ap.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: '1px solid var(--line)' }}>
                 <span style={{ fontSize: 11, color: 'var(--soft)' }}>{ap.title.slice(0, 42)}…</span>
                 <span className={`tag ${ap.status === 'pending' ? 'tag--signal' : ap.status === 'blocked' ? 'tag--warn' : 'tag--ok'}`}>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { projectFixtures, approvalFixtures, teamMemberFixtures } from '../data/fixtures'
-import type { CanonicalProject } from '../types/warung-os'
+import { useWarungData } from '../data/dataSource'
+import type { CanonicalProject, CanonicalTeamMember, ApprovalItem } from '../types/warung-os'
 
 function statusTag(status: string | null): JSX.Element {
   switch (status) {
@@ -30,10 +30,10 @@ function fmtDate(iso: string | null): string {
   return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 }
 
-function ProjectDetail({ project }: { project: CanonicalProject }) {
-  const approval = approvalFixtures.find(a => a.project === project.id)
-  const owner = teamMemberFixtures.find(m => m.name === project.owner)
-  const teamMembers = (project.team ?? []).map(name => teamMemberFixtures.find(m => m.name === name)).filter(Boolean)
+function ProjectDetail({ project, approvals, allTeamMembers }: { project: CanonicalProject; approvals: ApprovalItem[]; allTeamMembers: CanonicalTeamMember[] }) {
+  const approval = approvals.find(a => a.project === project.id)
+  const owner = allTeamMembers.find(m => m.name === project.owner)
+  const teamMembers = (project.team ?? []).map(name => allTeamMembers.find(m => m.name === name)).filter(Boolean)
 
   return (
     <div className="project-detail">
@@ -144,8 +144,10 @@ function ProjectDetail({ project }: { project: CanonicalProject }) {
 }
 
 export default function ActiveProjectsPage() {
-  const [selectedId, setSelectedId] = useState<string | null>('warung-os')
-  const selectedProject = projectFixtures.find(p => p.id === selectedId) ?? null
+  const { data } = useWarungData()
+  const { projects, approvals, teamMembers } = data
+  const [selectedId, setSelectedId] = useState<string | null>(projects[0]?.id ?? null)
+  const selectedProject = projects.find(p => p.id === selectedId) ?? null
 
   return (
     <div className="page">
@@ -171,7 +173,7 @@ export default function ActiveProjectsPage() {
           <div className="mono">Blocker / Next</div>
           <div className="mono">Status</div>
         </div>
-        {projectFixtures.map(project => (
+        {projects.map(project => (
           <div
             key={project.id}
             className="project-row"
@@ -200,7 +202,7 @@ export default function ActiveProjectsPage() {
         ))}
       </div>
 
-      {selectedProject && <ProjectDetail project={selectedProject} />}
+      {selectedProject && <ProjectDetail project={selectedProject} approvals={approvals} allTeamMembers={teamMembers} />}
 
       <div className="gap" />
 

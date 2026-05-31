@@ -1,35 +1,73 @@
-# Warung OS — Phase 1 MVP Shell
+# Warung OS — Phase 2 Data Adapters
 
 Local React + Vite + TypeScript operating surface for Warung Kerja.
 
-**Status:** Phase 1 shipped and pushed to GitHub. Phase 2 is Data Contracts + Hermes Source Adapters.
+**Status:** Phase 2 in progress — data source boundary + snapshot contract implemented.
 
 **GitHub:** https://github.com/warung-kerja/warung-os
 
 ## Commands
 
 ```bash
-npm install       # install dependencies
-npm run dev       # dev server at http://localhost:5173
-npm run build     # production build (tsc + vite)
-npm run preview   # preview production build
+npm install              # install dependencies
+npm run dev              # dev server at http://localhost:5173
+npm run build            # production build (tsc + vite)
+npm run preview          # preview production build
+npm run snapshot:generate  # generate demo snapshot at public/snapshots/latest.json
 ```
+
+## Data modes
+
+The app shows a `DATA SOURCE:` label in the Operations page header.
+
+| Label | Meaning |
+|-------|---------|
+| `FIXTURE` | No snapshot found — all data from TypeScript fixtures |
+| `FIXTURE FALLBACK` | Snapshot load attempted but failed — fell back to fixtures |
+| `SNAPSHOT` | Loaded from `public/snapshots/latest.json` |
+| `SNAPSHOT · HERMES-ONLY` | Loaded snapshot with confirmed Hermes-only scope |
+
+### Fixture mode (default)
+
+No setup needed. The app starts with fixture data from `src/data/fixtures.ts`.
+
+### Snapshot mode
+
+1. Run `npm run snapshot:generate` to write `public/snapshots/latest.json`
+2. Start dev server with `npm run dev`
+3. The app loads the snapshot on mount and shows `DATA SOURCE: SNAPSHOT`
+
+Snapshot files are gitignored. The generator produces demo-safe placeholder data.
+See `docs/snapshot-contract.md` for the full JSON schema.
 
 ## Structure
 
 ```
 src/
-  App.tsx                      page state root
+  App.tsx                      page state root + WarungDataProvider
   main.tsx                     React entry
   styles.css                   design tokens + all component styles
-  types/warung-os.ts           TypeScript contracts (MC Online compatible)
-  data/fixtures.ts             all fixture data
+  types/
+    warung-os.ts               base entity contracts (MC Online compatible)
+    snapshot.ts                WarungSnapshot contract + WarungData bundle type
+  data/
+    fixtures.ts                all Phase 1 fixture data
+    dataSource.tsx             data boundary — WarungDataProvider + useWarungData()
+    snapshotLoader.ts          async /snapshots/latest.json loader with fallback
   components/
     Shell.tsx                  topbar + sidebar nav + rail (context-sensitive)
     HomePage.tsx               Daily Brief — metrics, recap, focus, approvals
     ActiveProjectsPage.tsx     Project list + detail + approval module
     OperationsPage.tsx         6-tab ops surface (all 10 data categories)
     WikiPage.tsx               search/browse + detail reader
+scripts/
+  generate-snapshot.mjs        local snapshot generator (demo/fixture-backed)
+docs/
+  snapshot-contract.md         WarungSnapshot JSON schema docs
+  phase-2-data-adapters-plan.md  full Phase 2 implementation plan
+public/
+  snapshots/
+    .gitkeep                   directory tracked; latest.json is gitignored
 ```
 
 ## Operations page coverage

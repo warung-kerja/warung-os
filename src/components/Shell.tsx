@@ -1,5 +1,5 @@
 import type { Page } from '../App'
-import { approvalFixtures, cronJobFixtures, hermesModelHealthFixtures, wikiFixtures } from '../data/fixtures'
+import { useWarungData } from '../data/dataSource'
 import HomePage from './HomePage'
 import ActiveProjectsPage from './ActiveProjectsPage'
 import OperationsPage from './OperationsPage'
@@ -24,10 +24,18 @@ const railQuestions: Record<Page, string> = {
   wiki:       'Is basic search/browse enough before AI semantic search?',
 }
 
+function formatSnapshotTime(generatedAt: string | null): string {
+  if (!generatedAt) return 'not generated'
+  const d = new Date(generatedAt)
+  if (Number.isNaN(d.getTime())) return 'unknown'
+  return d.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })
+}
+
 function RailContent({ activePage }: { activePage: Page }) {
-  const pendingApprovals = approvalFixtures.filter(a => a.status === 'pending')
-  const warnCrons = cronJobFixtures.filter(c => c.status === 'warn' || c.status === 'bad')
-  const primaryModel = hermesModelHealthFixtures.find(h => h.is_primary)
+  const { data } = useWarungData()
+  const pendingApprovals = data.approvals.filter(a => a.status === 'pending')
+  const warnCrons = data.cronJobs.filter(c => c.status === 'warn' || c.status === 'bad')
+  const primaryModel = data.hermesModelHealth.find(h => h.is_primary)
 
   if (activePage === 'home') {
     return (
@@ -71,7 +79,7 @@ function RailContent({ activePage }: { activePage: Page }) {
     return (
       <>
         <h3 className="rail-heading">Approval queue</h3>
-        {approvalFixtures.map(ap => (
+        {data.approvals.map(ap => (
           <div key={ap.id} className="rail-block">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <span className="mono" style={{ fontSize: 9 }}>{ap.project}</span>
@@ -97,7 +105,7 @@ function RailContent({ activePage }: { activePage: Page }) {
             {primaryModel?.model ?? '—'}
           </div>
           <p className="rail-text" style={{ marginTop: 4 }}>
-            {primaryModel ? `${primaryModel.latency_ms}ms · ${primaryModel.status.toUpperCase()}` : 'Unknown'}
+            {primaryModel ? `${primaryModel.latency_ms ?? 'latency n/a'} · ${primaryModel.status.toUpperCase()}` : 'Unknown'}
           </p>
         </div>
         {warnCrons.length > 0 && (
@@ -113,7 +121,9 @@ function RailContent({ activePage }: { activePage: Page }) {
         )}
         <div className="rail-block">
           <div className="mono">Snapshot</div>
-          <p className="rail-text" style={{ marginTop: 6 }}>Last: 06:48 — all fixture data. Real sync adapters come in Phase 2.</p>
+          <p className="rail-text" style={{ marginTop: 6 }}>
+            Last: {formatSnapshotTime(data.meta.generatedAt)} — {data.meta.sourceMode === 'snapshot' ? 'safe local snapshot loaded' : 'fixture fallback'}.
+          </p>
         </div>
       </>
     )
@@ -125,8 +135,8 @@ function RailContent({ activePage }: { activePage: Page }) {
         <h3 className="rail-heading">Wiki index</h3>
         <div className="rail-block">
           <div className="mono">Total entries</div>
-          <div className="rail-number">{wikiFixtures.length}</div>
-          <p className="rail-text">Fixture entries across 5 source types.</p>
+          <div className="rail-number">{data.wiki.length}</div>
+          <p className="rail-text">Entries across 5 source types.</p>
         </div>
         <div className="rail-block">
           <div className="mono">Phase 2</div>
@@ -134,7 +144,7 @@ function RailContent({ activePage }: { activePage: Page }) {
         </div>
         <div className="rail-list">
           {['agent_diary', 'journal', 'project_note', 'decision_log', 'reference'].map(t => {
-            const count = wikiFixtures.filter(e => e.source_type === t).length
+            const count = data.wiki.filter(e => e.source_type === t).length
             return (
               <div key={t} className="rail-item" style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span className="mono" style={{ fontSize: 9 }}>{t.replace('_', ' ')}</span>
@@ -151,7 +161,9 @@ function RailContent({ activePage }: { activePage: Page }) {
 }
 
 export default function Shell({ activePage, setActivePage }: ShellProps) {
-  const pendingCount = approvalFixtures.filter(a => a.status === 'pending').length
+  const { data } = useWarungData()
+  const pendingCount = data.approvals.filter(a => a.status === 'pending').length
+  const snapshotLabel = data.meta.generatedAt ? formatSnapshotTime(data.meta.generatedAt) : 'not generated'
 
   return (
     <div className="shell">
@@ -169,12 +181,12 @@ export default function Shell({ activePage, setActivePage }: ShellProps) {
             <span className="status-dot warn" />
             {pendingCount} approval{pendingCount !== 1 ? 's' : ''} waiting
           </span>
-          <span>Last snapshot: 06:48</span>
+          <span>Last snapshot: {snapshotLabel}</span>
           <span>//// daily operating surface</span>
         </div>
         <div className="topbar-user">
           <span className="mono">Raz / Owner View</span>
-          <span className="mono">Phase 1 MVP</span>
+          <span className="mono">Phase 2 Data Adapters</span>
         </div>
       </header>
 
@@ -196,12 +208,12 @@ export default function Shell({ activePage, setActivePage }: ShellProps) {
         <div className="sidebar-section">
           <div className="mono" style={{ marginBottom: 8 }}>Phase status</div>
           <div className="sidebar-card">
-            <strong>Phase 1 — In build</strong>
-            <p>Local fixture shell. Four tabs, Mission Control-style surface, no live data yet.</p>
+            <strong>Phase 1 — Shipped</strong>
+            <p>Local fixture shell is built, QA'd, and pushed to GitHub.</p>
           </div>
           <div className="sidebar-card">
-            <strong>Phase 2 — Planned</strong>
-            <p>Adapter boundaries for Obsidian, TickTick, Hermes health, and git sources.</p>
+            <strong>Phase 2 — In progress</strong>
+            <p>Data-source boundary and safe local snapshot loader are online; real adapters remain read-only next.</p>
           </div>
         </div>
       </aside>

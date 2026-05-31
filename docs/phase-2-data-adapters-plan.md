@@ -41,7 +41,7 @@
 
 ---
 
-## Task 1: Add source mode boundary
+## Task 1: Add source mode boundary ✓ IMPLEMENTED
 
 **Objective:** Create one app-level data boundary so components stop importing raw fixtures directly.
 
@@ -60,12 +60,12 @@
 5. Run `npm run build`.
 6. Commit: `refactor: add Warung OS data source boundary`.
 
-## Task 2: Formalize snapshot schema
+## Task 2: Formalize snapshot schema ✓ IMPLEMENTED
 
 **Objective:** Define the JSON snapshot contract that Phase 2 collectors must emit.
 
 **Files:**
-- Create: `src/types/snapshots.ts`
+- Create: `src/types/snapshot.ts`
 - Modify: `src/types/warung-os.ts` if shared fields need cleanup.
 - Create: `docs/snapshot-contract.md`
 
@@ -77,7 +77,7 @@
 5. Run `npm run build`.
 6. Commit: `docs: define Warung OS snapshot contract`.
 
-## Task 3: Add local snapshot loader with fixture fallback
+## Task 3: Add local snapshot loader with fixture fallback ✓ IMPLEMENTED
 
 **Objective:** Let the app read a local static JSON snapshot when present, while keeping fixtures as fallback.
 
@@ -95,7 +95,7 @@
 5. Run `npm run build`.
 6. Commit: `feat: load local snapshots with fixture fallback`.
 
-## Task 4: Build Hermes-safe snapshot collector skeleton
+## Task 4: Build Hermes-safe snapshot collector skeleton ✓ IMPLEMENTED
 
 **Objective:** Create a local script that emits a sanitized snapshot file without integrating every source yet.
 
@@ -114,7 +114,7 @@
 6. Run snapshot command and `npm run build`.
 7. Commit: `feat: add Hermes-safe snapshot generator skeleton`.
 
-## Task 5: Add Hermes cron/provider health collector
+## Task 5: Add Hermes cron/provider health collector ✓ SKELETON IMPLEMENTED
 
 **Objective:** Populate Operations health with real Hermes status where safe and available.
 

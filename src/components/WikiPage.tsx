@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { wikiFixtures } from '../data/fixtures'
+import { useWarungData } from '../data/dataSource'
 import type { WikiEntry } from '../types/warung-os'
 
 function sourceTypeLabel(t: WikiEntry['source_type']): string {
@@ -28,13 +28,15 @@ function fmtDate(iso: string): string {
 }
 
 export default function WikiPage() {
+  const { data } = useWarungData()
+  const wiki = data.wiki
   const [query, setQuery] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>('wk-1')
+  const [selectedId, setSelectedId] = useState<string | null>(wiki[0]?.id ?? null)
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return wikiFixtures
-    return wikiFixtures.filter(e =>
+    if (!q) return wiki
+    return wiki.filter(e =>
       e.title.toLowerCase().includes(q) ||
       e.excerpt.toLowerCase().includes(q) ||
       e.body.toLowerCase().includes(q) ||
