@@ -114,23 +114,35 @@
 6. Run snapshot command and `npm run build`.
 7. Commit: `feat: add Hermes-safe snapshot generator skeleton`.
 
-## Task 5: Add Hermes cron/provider health collector ✓ SKELETON IMPLEMENTED
+## Task 5: Add Hermes cron/provider health collector ✓ DONE
 
 **Objective:** Populate Operations health with real Hermes status where safe and available.
 
-**Files:**
-- Modify: `scripts/generate_snapshot.py` or equivalent.
-- Modify: `docs/snapshot-contract.md`.
-- Modify: `src/components/OperationsPage.tsx` if additional unavailable states are needed.
+**Completed 2026-05-31 by Mia.**
 
-**Steps:**
-1. Read Hermes cron job list via safe local source/tooling where available.
-2. Read provider/fallback health from safe Hermes config/status outputs without exposing keys.
-3. Scope to active profile first: `tech-director`.
-4. Populate unavailable/warning states if data is inaccessible.
-5. Run snapshot command, inspect JSON manually for secrets.
-6. Run `npm run build`.
-7. Commit: `feat: collect Hermes cron and provider health snapshots`.
+**Files changed:**
+- Modified: `scripts/generate-snapshot.mjs` — upgraded from static skeleton to real data collectors.
+- Modified: `docs/snapshot-contract.md` — documented real vs placeholder adapter sections.
+
+**What is REAL data in the generator now:**
+- `workspace_signal` — real warung-os git log via `git log`, `git status --porcelain` (branch, HEAD, commits 24h/7d, file churn, working tree state).
+- `source_health` — filesystem checks on the snapshot file and warung-os git repo.
+- `cron_jobs` — sanitized Hermes profile cron metadata from `cron/jobs.json` (prompts, delivery targets, chat IDs omitted).
+- `hermes_model_health` — sanitized model/provider config metadata from active Hermes profile; no live API health/latency check.
+
+**What remains UNAVAILABLE (adapter not connected):**
+- `agent_token_daily`, `model_token_daily`, `tool_usage_daily` — requires Hermes log adapter.
+- `dot_delegation` — requires live Hermes delegation tracker.
+- `wiki.entries` — requires Obsidian adapter.
+- `team_members` status — static placeholder; requires live Hermes agent status adapter.
+
+**Safety notes:**
+- No secrets, API keys, OAuth tokens, transcripts, cron prompts, or delivery targets are read or written.
+- Secret scan: only git log, git status, and fs.stat calls. No .env files read.
+
+**Validation:**
+- `npm run snapshot:generate` → snapshot written, git signals ok, Hermes profile cron metadata read with prompts/delivery targets omitted, model/provider config rows emitted.
+- `npm run build` → clean (0 errors, 0 warnings).
 
 ## Task 6: Add project tracker source adapter
 

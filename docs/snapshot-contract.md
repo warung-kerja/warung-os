@@ -1,7 +1,7 @@
 # Warung OS — Snapshot Contract
 
-**Schema version:** `1`  
-**Updated:** 2026-05-31  
+**Schema version:** `1`
+**Updated:** 2026-05-31 (Task 5 — cron/provider health adapter)
 **Owner:** Mia (tech lead)
 
 ---
@@ -99,6 +99,25 @@ is older than the threshold.
 | Schema types | `src/types/snapshot.ts` |
 | Snapshot loader | `src/data/snapshotLoader.ts` |
 | Data source boundary | `src/data/dataSource.tsx` |
+
+---
+
+## Adapter status (as of Task 5)
+
+| Adapter | Status | Data source |
+|---------|--------|-------------|
+| `workspace_signal` | **Real** | `git log`, `git status --porcelain` on warung-os repo |
+| `source_health` | **Real** | `fs.stat` on snapshot, Hermes cron/config metadata files + `git status` on repo |
+| `cron_jobs` | **Real (sanitized)** | Active Hermes profile `cron/jobs.json`; prompts, delivery targets, and chat IDs omitted |
+| `hermes_model_health` | **Partial** | Active Hermes profile `config.yaml` model/provider metadata; no live API/latency check |
+| `agent_token_daily` | Unavailable | Hermes log adapter not yet connected |
+| `model_token_daily` | Unavailable | Hermes log adapter not yet connected |
+| `tool_usage_daily` | Unavailable | Hermes log adapter not yet connected |
+| `dot_delegation` | Unavailable | Live Hermes delegation tracker not yet connected |
+| `team_members` (projects) | Static placeholder | Live Hermes agent status adapter not yet connected |
+| `wiki.entries` | Unavailable | Obsidian adapter not yet connected |
+
+When an adapter is unavailable, the generator writes an empty array or `null` and adds an entry to `adapter_warnings`. The UI shows `—unavailable—` in those panels. Never fabricate values.
 
 ---
 
