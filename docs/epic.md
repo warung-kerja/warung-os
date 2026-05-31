@@ -4,11 +4,13 @@
 
 - Wireframe approved by Raz: `/Users/gabi/Documents/warung-repo/warung-os/wireframes/001-low-fi-warung-os/index.html`
 - TickTick board created: `Warung OS` under `🏪Warung Kerja 1.0`
+- Phase 1 app shell built, QA'd, committed, and pushed.
+- GitHub repo: https://github.com/warung-kerja/warung-os
 - Build worker: Claude Code CLI, launched by Mia with `HOME=/Users/gabi /Users/gabi/.local/bin/claude ...`
 
 ## Phase 0 — Foundation docs and kanban
 
-Status: Done / in progress.
+Status: Done.
 
 - Obsidian project docs updated.
 - Repo PRD created.
@@ -17,7 +19,7 @@ Status: Done / in progress.
 
 ## Phase 1 — Local app shell MVP
 
-Status: In build.
+Status: Done / QA passed / pushed to GitHub.
 
 Deliverables:
 
@@ -37,11 +39,20 @@ Acceptance:
 
 ## Phase 2 — Data contracts and source adapters
 
+Status: Active next phase.
+
+Plan: `docs/phase-2-data-adapters-plan.md`
+
 Deliverables:
 
-- Formal TypeScript contracts for fixture data.
-- Adapter boundaries for Obsidian, TickTick, Hermes health, local git/workspaces, and wiki/journal notes.
-- Document source freshness rules.
+- Add a data-source boundary between UI components and fixture/snapshot data.
+- Formalize sanitized `WarungSnapshot` contracts.
+- Add fixture fallback plus local snapshot loading.
+- Build local snapshot collector skeleton.
+- Add Hermes-only cron/provider/usage source adapters where safely available.
+- Add Obsidian project tracker and TickTick board source adapters.
+- Document source freshness rules and unavailable/stale states.
+- Keep Operations scoped to Hermes agents/environment only; exclude OpenClaw telemetry.
 
 ## Phase 3 — Real data integration
 
@@ -70,7 +81,8 @@ Deliverables:
 
 ## Risks / constraints
 
-- GitHub push is pending `gh` auth / repo creation approval.
-- Scope can balloon; keep first build fixture-backed and local.
+- Scope can balloon; Phase 2 must start with read-only snapshot adapters and keep fixture fallback.
 - Operations parity is important; do not reduce it to a tiny health card.
+- Operations data must be Hermes-only; do not mix in OpenClaw agents, token usage, cron jobs, or telemetry.
 - No secrets or raw transcripts may be exposed.
+- Write paths stay request-state/audited until Raz explicitly approves real actions.

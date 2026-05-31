@@ -2,6 +2,10 @@
 
 Local React + Vite + TypeScript operating surface for Warung Kerja.
 
+**Status:** Phase 1 shipped and pushed to GitHub. Phase 2 is Data Contracts + Hermes Source Adapters.
+
+**GitHub:** https://github.com/warung-kerja/warung-os
+
 ## Commands
 
 ```bash
@@ -52,11 +56,19 @@ Mission Control Online operating surface:
 
 ## Data
 
-All data is fixture-backed. No live API calls, no secrets, no write actions.
+Phase 1 data is fixture-backed. No live API calls, no secrets, no write actions.
+
+Current fixture source:
+
+```text
+src/data/fixtures.ts
+```
 
 TypeScript contracts in `src/types/warung-os.ts` are adapted from Mission Control Online's
 `supabase.ts` contracts — same field names and shapes so real adapters can replace fixtures
 in Phase 2 with minimal refactoring.
+
+Operations data scope is **Hermes-only**. Do not mix OpenClaw agents, OpenClaw token usage, OpenClaw cron jobs, or OpenClaw telemetry into Warung OS Operations.
 
 ## Limitations (Phase 1)
 
@@ -71,7 +83,18 @@ in Phase 2 with minimal refactoring.
 
 ## Phase 2 targets
 
-- Adapter boundaries for Obsidian, TickTick, Hermes, and git sources
-- Real cron/token/tool data collectors
-- SyncRequest write path
-- Hosted snapshot mirror (optional, auth-gated)
+See the full plan:
+
+```text
+docs/phase-2-data-adapters-plan.md
+```
+
+Immediate targets:
+
+- Add a data-source boundary so components no longer import fixtures directly.
+- Define a sanitized `WarungSnapshot` contract.
+- Add fixture fallback plus local snapshot loading.
+- Build a local Hermes-safe snapshot generator.
+- Collect Hermes-only cron/provider/usage data where safely available.
+- Start Obsidian project tracker and TickTick board adapters.
+- Keep all generated data read-only, redacted, and clearly labelled as fixture/snapshot/unavailable.

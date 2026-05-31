@@ -171,7 +171,10 @@ Keep adapters out of first pass unless cheap. Use fixture data shaped like futur
 
 ## Open questions parked for later
 
-- Hosted mirror: local-only vs online snapshot mirror.
-- Real source ownership: Obsidian vs TickTick vs app database.
+- Which Hermes profiles should Operations include first: `tech-director` only, or all Warung Kerja Hermes profiles on this Mac?
+- Snapshot storage: commit safe demo snapshots, or keep generated snapshots local-only/gitignored?
+- Exact Wiki ingestion scope: which Obsidian folders are approved for diary/journal browsing?
+- TickTick privacy: exclude comments by default, or include selected comments in snapshots?
+- Hosted mirror: local-only vs online auth-gated snapshot mirror.
 - Exact approval write path.
 - Gabs final visual direction pass.
