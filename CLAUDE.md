@@ -27,6 +27,8 @@ Top-level pages:
 
 Critical Operations requirement: preserve Mission Control Online-style data/report parity even if the Warung OS UI differs.
 
+Operations data scope: token usage, cron/automation health, provider/fallback health, source health, sync runs, workspace signals, and agent/team status must represent Raz's Hermes agents/environment only. Do not mix in OpenClaw agents or OpenClaw telemetry.
+
 ## Local reference paths
 
 - Reference repo: `/Users/gabi/Documents/warung-repo/_reference/mission-control-online`

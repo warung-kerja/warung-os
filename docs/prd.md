@@ -92,6 +92,8 @@ Acceptance criteria:
 
 Raz requirement: the Operations page can use a different UI solution, but it must let him read the same type of data and report as Mission Control Online.
 
+Data scope requirement: Operations must show Raz's Hermes agents/environment only. Token usage, cron/automation health, model/provider/fallback health, source health, sync runs, workspace/git signals, and agent/team status must not include OpenClaw agents or OpenClaw telemetry.
+
 The first build must include fixture-backed sections for:
 
 - Agent token usage daily.
