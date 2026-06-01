@@ -468,9 +468,9 @@ export const workspaceSignalFixture: WorkspaceSignalSnapshot = {
 // ---- HERMES MODEL HEALTH ----
 
 export const hermesModelHealthFixtures: HermesModelHealth[] = [
-  { id:'hm-1', provider:'Anthropic', model:'claude-sonnet-4-6', status:'ok', latency_ms:420, is_primary:true, is_fallback:false, last_checked_at:'2026-05-31T06:45:00Z' },
-  { id:'hm-2', provider:'Anthropic', model:'claude-opus-4-7', status:'ok', latency_ms:880, is_primary:false, is_fallback:false, last_checked_at:'2026-05-31T06:45:00Z' },
-  { id:'hm-3', provider:'Anthropic', model:'claude-haiku-4-5', status:'ok', latency_ms:180, is_primary:false, is_fallback:true, last_checked_at:'2026-05-31T06:45:00Z' },
+  { id:'hm-1', profile:'tech-director', provider:'Anthropic', model:'claude-sonnet-4-6', status:'ok', latency_ms:420, is_primary:true, is_fallback:false, last_checked_at:'2026-05-31T06:45:00Z' },
+  { id:'hm-2', profile:'tech-director', provider:'Anthropic', model:'claude-opus-4-7', status:'ok', latency_ms:880, is_primary:false, is_fallback:false, last_checked_at:'2026-05-31T06:45:00Z' },
+  { id:'hm-3', profile:'tech-director', provider:'Anthropic', model:'claude-haiku-4-5', status:'ok', latency_ms:180, is_primary:false, is_fallback:true, last_checked_at:'2026-05-31T06:45:00Z' },
 ]
 
 // ---- DOT DELEGATION ----

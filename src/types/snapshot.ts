@@ -19,6 +19,8 @@ import type {
   ApprovalItem,
   WikiEntry,
   HermesModelHealth,
+  HermesGatewayStatus,
+  HermesProviderCatalogEntry,
   DotDelegationStatus,
   TickTickKanbanBoard,
 } from './warung-os'
@@ -54,6 +56,9 @@ export interface OperationsSnapshot {
   workspace_signal: WorkspaceSignalSnapshot | null
   hermes_model_health: HermesModelHealth[]
   dot_delegation: DotDelegationStatus[]
+  // Phase 3: gateway connectivity and provider catalog
+  gateway_status: HermesGatewayStatus[]
+  provider_catalog: HermesProviderCatalogEntry[]
 }
 
 export interface WarungSnapshot {
@@ -106,6 +111,9 @@ export interface WarungData {
   workspaceSignal: WorkspaceSignalSnapshot | null
   hermesModelHealth: HermesModelHealth[]
   dotDelegation: DotDelegationStatus[]
+  // Phase 3: gateway connectivity and provider catalog
+  gatewayStatus: HermesGatewayStatus[]
+  providerCatalog: HermesProviderCatalogEntry[]
   // Wiki
   wiki: WikiEntry[]
 }

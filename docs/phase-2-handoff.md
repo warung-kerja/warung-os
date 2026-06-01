@@ -110,7 +110,7 @@ These adapters are not connected. Their panel shows `—unavailable—` in Opera
 | `tool_usage_daily` | Hermes log adapter not connected |
 | `dot_delegation` | Live Hermes delegation tracker not connected |
 | `team_members` | Static placeholder; live agent status adapter not connected |
-| `wiki.entries` | Approved Obsidian folder scope not confirmed with Raz |
+| `wiki.entries` | Real from approved folder `05_1%_Journal/` only |
 
 ## Phase 2 limitations
 
@@ -118,18 +118,19 @@ These adapters are not connected. Their panel shows `—unavailable—` in Opera
 - Hermes token/usage data requires a Hermes log adapter (Phase 3 scope).
 - Most Obsidian projects show `registry_status: "unstructured"` because they lack Project
   Home frontmatter. Adding frontmatter to each folder improves coverage.
-- Wiki ingestion is blocked until Raz confirms which Obsidian folders are in scope.
-- Snapshot freshness: generated snapshots are local-only and gitignored. A demo snapshot
-  policy (commit `demo.json` with `is_demo: true`) has not yet been decided.
+- Wiki ingestion is approved only for `05_1%_Journal` unless Raz expands scope.
+- Snapshot freshness: generated snapshots stay local-only/gitignored by default; only deliberately sanitized demo snapshots should ever be committed.
 
-## Open decisions for Raz
+## Resolved Phase 3 decisions
 
-1. **Wiki ingestion scope:** Which Obsidian folders are approved for wiki browsing?
-2. **Snapshot commit policy:** Commit sanitized demo snapshots (`demo.json`) or keep all
-   generated snapshots local-only/gitignored?
-3. **Hermes profile scope:** `tech-director` profile only, or include other Warung Kerja
-   Hermes profiles?
-4. **GitHub push unblock:** HTTPS auth is broken locally (`could not read Username`). SSH
+- **Wiki ingestion scope:** approved source is `/Users/gabi/Documents/Warung Kerja 1.0/05_1%_Journal/` only unless Raz expands scope.
+- **Snapshot policy:** generated snapshots stay local-only/gitignored by default; commit only deliberately sanitized demo snapshots if needed later.
+- **Hermes profile scope:** Operations should cover Raz's Hermes environment across all Hermes profiles now/future, not OpenClaw.
+- **Hosted direction:** prepare an eventual auth-gated hosted mirror pattern similar to Mission Control Online.
+
+## Open decision for Raz
+
+1. **GitHub push unblock:** HTTPS auth is broken locally (`could not read Username`). SSH
    key or personal access token needed to push Phase 2 commits to GitHub.
 
 ## Phase 3 handoff

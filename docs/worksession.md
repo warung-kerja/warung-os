@@ -8,9 +8,9 @@ Warung OS
 
 ## Current priority
 
-Phase 2 — Hermes data adapters.
+Phase 3 — hosted-readiness and real-data hardening.
 
-Next slice: continue the hosted-readiness path: harden the all-Hermes-profile snapshot adapters, keep Wiki ingestion scoped to `05_1%_Journal`, and prepare the eventual auth-gated hosted mirror pattern similar to Mission Control Online.
+Next slice: continue the hosted-readiness path: harden the all-Hermes-profile snapshot adapters, keep Wiki ingestion scoped to `05_1%_Journal`, keep generated snapshots local/gitignored unless explicitly demo-safe, and prepare the eventual auth-gated hosted mirror pattern similar to Mission Control Online.
 
 ## Source of truth
 

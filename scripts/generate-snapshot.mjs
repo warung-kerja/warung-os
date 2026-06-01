@@ -336,6 +336,45 @@ function collectSourceHealth() {
     })
   }
 
+  // Gateway state files and provider caches per profile (Phase 3)
+  const phase3Sources = HERMES_PROFILES.flatMap(profile => [
+    {
+      id: `sh-hermes-${safeId(profile.name)}-gateway-state`,
+      label: `Hermes gateway state (${profile.name})`,
+      path: join(profile.dir, 'gateway_state.json'),
+      type: 'filesystem',
+    },
+    {
+      id: `sh-hermes-${safeId(profile.name)}-provider-cache`,
+      label: `Hermes provider models cache (${profile.name})`,
+      path: join(profile.dir, 'provider_models_cache.json'),
+      type: 'filesystem',
+    },
+  ])
+
+  for (const source of phase3Sources) {
+    const exists = existsSync(source.path)
+    let modifiedAt = null
+    let ageHours = null
+    if (exists) {
+      const stat = statSync(source.path)
+      modifiedAt = new Date(stat.mtimeMs).toISOString()
+      ageHours = parseFloat(((now.getTime() - stat.mtimeMs) / (1000 * 60 * 60)).toFixed(2))
+    }
+    rows.push({
+      id: source.id,
+      label: source.label,
+      source_type: source.type,
+      exists,
+      readable: exists,
+      modified_at: modifiedAt,
+      age_hours: ageHours,
+      status: exists ? 'ok' : 'warn',
+      error: exists ? null : `Expected Hermes profile metadata file not found`,
+      synced_at: nowISO,
+    })
+  }
+
   // Disconnected adapters — reported honestly as bad
   rows.push({
     id: 'sh-hermes-token-log',
@@ -477,6 +516,138 @@ function collectCronHealth() {
       synced_at: nowISO,
       })
     }
+  }
+
+  return rows
+}
+
+// ---- Hermes gateway status ----
+// Reads gateway_state.json from every discovered Hermes profile directory.
+// Extracts: gateway state, active agents count, platform names + connectivity states.
+// Does NOT read session transcripts, API keys, cron prompts, or credentials.
+function collectGatewayStatus() {
+  const rows = []
+
+  for (const profile of HERMES_PROFILES) {
+    const stateFile = join(profile.dir, 'gateway_state.json')
+    try {
+      if (!existsSync(stateFile)) continue
+
+      const raw = readFileSync(stateFile, 'utf8')
+      const state = JSON.parse(raw)
+
+      const platforms = Object.entries(state.platforms ?? {}).map(([name, info]) => ({
+        name,
+        state: info?.state ?? 'unknown',
+        error_message: info?.error_message ?? null,
+        updated_at: info?.updated_at ?? null,
+      }))
+
+      rows.push({
+        id: `gw-${safeId(profile.name)}`,
+        profile: profile.name,
+        gateway_state: state.gateway_state ?? 'unknown',
+        active_agents: typeof state.active_agents === 'number' ? state.active_agents : 0,
+        platforms,
+        updated_at: state.updated_at ?? null,
+        synced_at: nowISO,
+      })
+    } catch (err) {
+      rows.push({
+        id: `gw-${safeId(profile.name)}-error`,
+        profile: profile.name,
+        gateway_state: 'unknown',
+        active_agents: 0,
+        platforms: [],
+        updated_at: null,
+        synced_at: nowISO,
+        error: `Failed to read gateway_state.json for profile ${profile.name}: ${String(err?.message ?? err)}`,
+      })
+    }
+  }
+
+  return rows
+}
+
+// ---- Cron run history ----
+// Reads cron output directory filenames (NOT file contents) to derive actual run history.
+// Filename format: YYYY-MM-DD_HH-MM-SS.md — no secret data, no prompt content.
+// Returns a map keyed by "profileName/jobId" → { run_count, recent_run_timestamps }.
+function collectCronRunHistory() {
+  const history = {}
+
+  for (const profile of HERMES_PROFILES) {
+    const cronOutputDir = join(profile.dir, 'cron', 'output')
+    if (!existsSync(cronOutputDir)) continue
+
+    try {
+      const jobDirs = readdirSync(cronOutputDir, { withFileTypes: true })
+        .filter(e => e.isDirectory())
+
+      for (const jobDir of jobDirs) {
+        const jobId = jobDir.name
+        const jobOutputPath = join(cronOutputDir, jobId)
+
+        try {
+          const files = readdirSync(jobOutputPath)
+            .filter(f => f.endsWith('.md'))
+            .sort()
+
+          const runTimestamps = files.map(f => {
+            // Parse YYYY-MM-DD_HH-MM-SS.md
+            const m = f.match(/^(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})\.md$/)
+            if (!m) return null
+            try {
+              return new Date(`${m[1]}T${m[2]}:${m[3]}:${m[4]}`).toISOString()
+            } catch { return null }
+          }).filter(Boolean)
+
+          const key = `${safeId(profile.name)}/${jobId}`
+          history[key] = {
+            job_id: jobId,
+            profile: profile.name,
+            run_count: files.length,
+            recent_run_timestamps: runTimestamps.slice(-5),
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
+  return history
+}
+
+// ---- Provider models catalog ----
+// Reads provider_models_cache.json from every discovered Hermes profile directory.
+// Extracts provider names, model counts, and cache age — no credentials, no keys.
+function collectProviderCatalog() {
+  const rows = []
+
+  for (const profile of HERMES_PROFILES) {
+    const catalogFile = join(profile.dir, 'provider_models_cache.json')
+    try {
+      if (!existsSync(catalogFile)) continue
+
+      const raw = readFileSync(catalogFile, 'utf8')
+      const cache = JSON.parse(raw)
+
+      for (const [providerName, info] of Object.entries(cache)) {
+        const models = Array.isArray(info?.models) ? info.models : []
+        // 'at' is a Unix epoch float timestamp
+        const cachedAt = typeof info?.at === 'number'
+          ? new Date(info.at * 1000).toISOString()
+          : null
+
+        rows.push({
+          id: `pc-${safeId(profile.name)}-${safeId(providerName)}`,
+          profile: profile.name,
+          provider: providerName,
+          model_count: models.length,
+          cached_at: cachedAt,
+          synced_at: nowISO,
+        })
+      }
+    } catch (_) {}
   }
 
   return rows
@@ -763,12 +934,31 @@ function collectTickTickKanban() {
 // ---- Run all collectors ----
 const gitResult       = collectGitSignals(ROOT)
 const modelHealth     = collectModelHealth()
+const cronRunHistory  = collectCronRunHistory()
+const cronJobsRaw     = collectCronHealth()
+const gatewayStatus   = collectGatewayStatus()
+const providerCatalog = collectProviderCatalog()
 const sourceHealth    = collectSourceHealth()
-const cronJobs        = collectCronHealth()
 const obsidianResult  = collectObsidianProjects()
 const wikiResult      = collectWikiEntries()
 const ticktickResult  = collectTickTickKanban()
 const durationMs      = Date.now() - startMs
+
+// Enrich cron jobs with run history from output directory (filenames only — no content read)
+const cronJobs = cronJobsRaw.map(job => {
+  // Match by profile+jobId key — job.id format is "cj-<profile>-<jobId>"
+  // Extract raw jobId from job.id: "cj-<profile>-<rawJobId>"
+  const profileSafe = safeId(job.agent ?? '')
+  const rawJobId = job.id.replace(new RegExp(`^cj-${profileSafe}-`), '')
+  const historyKey = `${profileSafe}/${rawJobId}`
+  const hist = cronRunHistory[historyKey]
+  if (!hist) return job
+  return {
+    ...job,
+    run_count: hist.run_count,
+    recent_run_timestamps: hist.recent_run_timestamps,
+  }
+})
 
 // Enrich the warung-os project entry with git-derived timing (real local data).
 const enrichedProjects = obsidianResult.projects.map(p => {
@@ -808,12 +998,21 @@ const projectItems = obsidianResult.ok && enrichedProjects.length > 0
       last_movement_at: gitResult.ok ? (gitResult.signal.latest_commit_at ?? nowISO) : nowISO,
     }]
 
+const gatewayRunning = gatewayStatus.filter(g => g.gateway_state === 'running').length
+const gatewayPlatformsSummary = gatewayStatus.flatMap(g => g.platforms).map(p => `${p.name}:${p.state}`).join(', ')
+
 const adapterWarnings = {
   workspace: gitResult.ok
     ? `Git signals collected from warung-os repo (real local data). Branch: ${gitResult.signal.branch}, HEAD: ${gitResult.signal.head}.`
     : `Git signals collection failed: ${gitResult.error}`,
-  cron: `Hermes cron metadata read from all discovered profiles with prompts/delivery targets omitted. Profiles discovered: ${HERMES_PROFILES.length}. Jobs recorded: ${cronJobs.length}.`,
+  cron: `Hermes cron metadata read from all discovered profiles with prompts/delivery targets omitted. Profiles discovered: ${HERMES_PROFILES.length}. Jobs recorded: ${cronJobs.length}. Run history enriched from output directory filenames (no content read).`,
   provider_health: `Model/provider rows are sanitized config metadata only — no live API health or latency check performed. Profiles discovered: ${HERMES_PROFILES.length}.`,
+  gateway_status: gatewayStatus.length > 0
+    ? `Hermes gateway state read from gateway_state.json for ${gatewayStatus.length} profile(s). Running: ${gatewayRunning}. Platforms: ${gatewayPlatformsSummary || 'none'}.`
+    : 'Hermes gateway_state.json not found in any profile — gateway status unavailable.',
+  provider_catalog: providerCatalog.length > 0
+    ? `Provider models catalog read from provider_models_cache.json for ${new Set(providerCatalog.map(p => p.profile)).size} profile(s). ${new Set(providerCatalog.map(p => p.provider)).size} provider(s). Total models: ${providerCatalog.reduce((n, p) => n + p.model_count, 0)}.`
+    : 'Provider models cache not found in any profile.',
   token_usage: 'Agent/model/tool token usage adapter not connected — arrays are empty until Hermes log adapter is wired in.',
   agent_status: 'Team member status is static placeholder — live Hermes agent status adapter not yet connected.',
   obsidian_projects: obsidianResult.ok
@@ -833,6 +1032,12 @@ const warnings = [
   gitResult.ok
     ? `Workspace git signals are real local data from warung-os repo (branch: ${gitResult.signal.branch}).`
     : `Workspace git signals unavailable — git collection failed: ${gitResult.error}`,
+  gatewayStatus.length > 0
+    ? `Hermes gateway status: ${gatewayRunning}/${gatewayStatus.length} profile(s) running. Platforms: ${gatewayPlatformsSummary || 'none'}.`
+    : 'Hermes gateway status unavailable — gateway_state.json not found.',
+  providerCatalog.length > 0
+    ? `Provider catalog: ${new Set(providerCatalog.map(p => p.provider)).size} provider(s) across ${new Set(providerCatalog.map(p => p.profile)).size} profile(s). Total available models: ${providerCatalog.reduce((n, p) => n + p.model_count, 0)}.`
+    : 'Provider catalog unavailable.',
   obsidianResult.ok
     ? `Obsidian project metadata collected from 03_Active_Projects/ (frontmatter only — body content not read). ${obsidianResult.projects.length} project(s) found.`
     : `Obsidian project adapter failed: ${obsidianResult.error}`,
@@ -979,10 +1184,12 @@ const snapshot = {
         trigger: 'manual',
         source_host: 'local',
         summary: {
-          type: 'phase2-all-adapters',
+          type: 'phase3-all-adapters',
           git_signals: gitResult.ok ? 'ok' : 'failed',
-          cron_adapter: cronJobs.some(job => job.status === 'bad') ? 'failed' : 'ok',
+          cron_adapter: cronJobs.some(job => job.status === 'bad') ? 'failed' : `ok (${cronJobs.length} job(s), run history enriched)`,
           provider_health: modelHealth.some(model => model.status === 'bad') ? 'failed' : 'config_only',
+          gateway_status: gatewayStatus.length > 0 ? `ok (${gatewayRunning}/${gatewayStatus.length} running, platforms: ${gatewayPlatformsSummary || 'none'})` : 'unavailable',
+          provider_catalog: providerCatalog.length > 0 ? `ok (${new Set(providerCatalog.map(p => p.provider)).size} providers, ${providerCatalog.reduce((n, p) => n + p.model_count, 0)} models)` : 'unavailable',
           token_adapter: 'unavailable',
           obsidian_projects_adapter: obsidianResult.ok ? `ok (${obsidianResult.projects.length} projects)` : `failed: ${obsidianResult.error}`,
           obsidian_wiki_adapter: wikiResult.ok ? `ok (${wikiResult.entries.length} entries)` : `failed: ${wikiResult.error}`,
@@ -1002,6 +1209,10 @@ const snapshot = {
     hermes_model_health: modelHealth,
 
     dot_delegation: [],
+
+    // Phase 3: gateway connectivity and provider catalog
+    gateway_status: gatewayStatus,
+    provider_catalog: providerCatalog,
   },
 
   wiki: {

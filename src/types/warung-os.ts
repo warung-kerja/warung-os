@@ -91,6 +91,9 @@ export interface CronJobSnapshot {
   duration_ms: number | null
   error: string | null
   synced_at: string
+  // Phase 3: enriched from cron output directory (filenames only — no content read)
+  run_count?: number | null
+  recent_run_timestamps?: string[] | null
 }
 
 export interface AgentTokenUsageDaily {
@@ -195,13 +198,42 @@ export interface WikiEntry {
 
 export interface HermesModelHealth {
   id: string
-  provider: string
-  model: string
-  status: 'ok' | 'degraded' | 'down'
+  profile: string
+  provider: string | null
+  model: string | null
+  status: 'ok' | 'config_present' | 'degraded' | 'down' | 'warn' | 'unconfigured' | 'bad'
   latency_ms: number | null
   is_primary: boolean
   is_fallback: boolean
   last_checked_at: string
+  error?: string
+}
+
+export interface HermesGatewayPlatform {
+  name: string
+  state: 'connected' | 'retrying' | 'paused' | 'disconnected' | string
+  error_message: string | null
+  updated_at: string | null
+}
+
+export interface HermesGatewayStatus {
+  id: string
+  profile: string
+  gateway_state: 'running' | 'stopped' | 'unknown' | string
+  active_agents: number
+  platforms: HermesGatewayPlatform[]
+  updated_at: string | null
+  synced_at: string
+  error?: string
+}
+
+export interface HermesProviderCatalogEntry {
+  id: string
+  profile: string
+  provider: string
+  model_count: number
+  cached_at: string | null
+  synced_at: string
 }
 
 export interface DotDelegationStatus {

@@ -204,12 +204,12 @@
 
 ---
 
-## Open decisions for Raz
+## Resolved Phase 3 decisions
 
-- Which Hermes profiles should Operations include first: `tech-director` only, or all Warung Kerja Hermes profiles on this Mac?
-- Should generated snapshots be committed for demo/history, or gitignored and local-only?
-- Which Obsidian folders are approved for Wiki ingestion?
-- Should TickTick comments be excluded by default from snapshots?
-- Should Phase 2 remain local-only, or prepare an auth-gated hosted mirror contract now?
+- Operations should include Raz's Hermes environment across all Hermes profiles now/future, not OpenClaw.
+- Generated snapshots stay local-only/gitignored by default; commit only deliberately sanitized demo snapshots when needed.
+- Wiki ingestion is approved only for `/Users/gabi/Documents/Warung Kerja 1.0/05_1%_Journal/` unless Raz expands scope.
+- TickTick comments are excluded by default from snapshots unless Raz explicitly approves comment ingestion.
+- Continue toward an eventual auth-gated hosted mirror pattern similar to Mission Control Online.
 
-<!-- edited by Mia, 2026-05-31 -->
+<!-- edited by Mia, 2026-06-01 -->

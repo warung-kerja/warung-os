@@ -51,6 +51,8 @@ function buildFixtureData(): WarungData {
     workspaceSignal: workspaceSignalFixture,
     hermesModelHealth: hermesModelHealthFixtures,
     dotDelegation: dotDelegationFixtures,
+    gatewayStatus: [],
+    providerCatalog: [],
     wiki: wikiFixtures,
   }
 }
@@ -82,6 +84,8 @@ function snapshotToData(snapshot: WarungSnapshot): WarungData {
     workspaceSignal: operations.workspace_signal,
     hermesModelHealth: operations.hermes_model_health,
     dotDelegation: operations.dot_delegation,
+    gatewayStatus: operations.gateway_status ?? [],
+    providerCatalog: operations.provider_catalog ?? [],
     wiki: wiki.entries,
   }
 }
