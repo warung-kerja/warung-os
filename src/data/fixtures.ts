@@ -13,6 +13,8 @@ import type {
   ApprovalItem,
   WikiEntry,
   HermesModelHealth,
+  HermesGatewayStatus,
+  HermesProviderCatalogEntry,
   DotDelegationStatus,
 } from '../types/warung-os'
 
@@ -480,6 +482,31 @@ export const dotDelegationFixtures: DotDelegationStatus[] = [
   { id:'dot-2', dot_name:'bofb-poster-v3', agent:'gabs', task:'Deliver poster direction v3 — two candidates for Raz review', status:'waiting', started_at:'2026-05-30T12:00:00Z', last_activity_at:'2026-05-30T14:22:00Z' },
   { id:'dot-3', dot_name:'etsy-automation', agent:'obey', task:'Complete Etsy API integration; test dry-run upload', status:'active', started_at:'2026-05-29T16:00:00Z', last_activity_at:'2026-05-29T18:44:00Z' },
   { id:'dot-4', dot_name:'obsidian-sync-fix', agent:'mia', task:'Diagnose TickTick rate limit on Obsidian sync bridge', status:'blocked', started_at:'2026-05-30T16:30:00Z', last_activity_at:'2026-05-30T17:00:00Z' },
+]
+
+// ---- HERMES GATEWAY STATUS ----
+
+export const gatewayStatusFixtures: HermesGatewayStatus[] = [
+  {
+    id: 'gw-tech-director',
+    profile: 'tech-director',
+    gateway_state: 'running',
+    active_agents: 2,
+    platforms: [
+      { name: 'telegram', state: 'connected', error_message: null, updated_at: SNAP },
+      { name: 'slack', state: 'paused', error_message: null, updated_at: SNAP },
+    ],
+    updated_at: SNAP,
+    synced_at: SNAP,
+  },
+]
+
+// ---- HERMES PROVIDER CATALOG ----
+
+export const providerCatalogFixtures: HermesProviderCatalogEntry[] = [
+  { id: 'pc-tech-director-anthropic', profile: 'tech-director', provider: 'anthropic', model_count: 8, cached_at: SNAP, synced_at: SNAP },
+  { id: 'pc-tech-director-openai',    profile: 'tech-director', provider: 'openai',    model_count: 12, cached_at: SNAP, synced_at: SNAP },
+  { id: 'pc-tech-director-google',    profile: 'tech-director', provider: 'google',    model_count: 5,  cached_at: SNAP, synced_at: SNAP },
 ]
 
 // ---- WIKI ENTRIES ----

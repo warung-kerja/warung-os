@@ -80,7 +80,7 @@ function UnavailableNote({ label }: { label: string }) {
 }
 
 function OverviewTab({ data }: { data: WarungData }) {
-  const { cronJobs, agentTokenDaily, hermesModelHealth, syncRuns, syncRequests } = data
+  const { cronJobs, agentTokenDaily, hermesModelHealth, syncRuns, syncRequests, gatewayStatus } = data
 
   const cronOk    = cronJobs.filter(c => c.enabled && c.status === 'ok').length
   const cronTotal = cronJobs.filter(c => c.enabled).length
@@ -92,6 +92,7 @@ function OverviewTab({ data }: { data: WarungData }) {
     .reduce((s, r) => s + r.total_tokens, 0)
 
   const primaryModel = hermesModelHealth.find(h => h.is_primary)
+  const gatewayRunning = gatewayStatus.filter(g => g.gateway_state === 'running').length
 
   const recentEvents = syncRuns.length > 0
     ? syncRuns.slice(0, 6).map(sr => ({
@@ -131,13 +132,24 @@ function OverviewTab({ data }: { data: WarungData }) {
           }
         </div>
         <div className="panel panel--min">
-          <div className="mono">Delegation / Hermes</div>
-          <div className="metric-value" style={{ color: 'var(--ok)', fontSize: 32 }}>
-            {primaryModel?.status === 'ok' ? 'OK' : primaryModel ? 'DEGRADED' : '—'}
-          </div>
-          <div className="metric-note">
-            {primaryModel ? `${primaryModel.model} · ${primaryModel.latency_ms != null ? `${primaryModel.latency_ms}ms` : 'latency n/a'}` : 'Model health unavailable'}
-          </div>
+          <div className="mono">Gateway / Hermes</div>
+          {gatewayStatus.length > 0
+            ? <>
+                <div className="metric-value" style={{ color: gatewayRunning === gatewayStatus.length ? 'var(--ok)' : gatewayRunning > 0 ? 'var(--warn)' : 'var(--bad)' }}>
+                  {gatewayRunning}/{gatewayStatus.length}
+                </div>
+                <div className="metric-note">profile{gatewayStatus.length !== 1 ? 's' : ''} running</div>
+                {primaryModel && <div className="metric-note" style={{ marginTop: 4 }}>{primaryModel.provider} · {primaryModel.model}</div>}
+              </>
+            : <>
+                <div className="metric-value" style={{ color: primaryModel?.status === 'ok' ? 'var(--ok)' : primaryModel ? 'var(--warn)' : 'var(--muted)', fontSize: 28 }}>
+                  {primaryModel?.status === 'ok' ? 'OK' : primaryModel ? 'DEGRADED' : '—'}
+                </div>
+                <div className="metric-note">
+                  {primaryModel ? `${primaryModel.model}` : 'Model health unavailable'}
+                </div>
+              </>
+          }
         </div>
       </div>
 
@@ -616,7 +628,7 @@ function WorkspaceTab({ data }: { data: WarungData }) {
 }
 
 function AgentsTab({ data }: { data: WarungData }) {
-  const { teamMembers, hermesModelHealth, dotDelegation } = data
+  const { teamMembers, hermesModelHealth, dotDelegation, gatewayStatus, providerCatalog } = data
   return (
     <>
       <div className="ops-section">
@@ -672,6 +684,77 @@ function AgentsTab({ data }: { data: WarungData }) {
                       <td className={h.is_primary ? 'cell-ok' : 'cell-muted'}>{h.is_primary ? 'yes' : '—'}</td>
                       <td className={h.is_fallback ? 'cell-ok' : 'cell-muted'}>{h.is_fallback ? 'yes' : '—'}</td>
                       <td className="cell-mono">{fmtTime(h.last_checked_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+        }
+      </div>
+
+      <div className="gap-sm" />
+
+      <div className="ops-section">
+        <div className="ops-section-label">Hermes gateway connectivity</div>
+        {gatewayStatus.length === 0
+          ? <div className="panel"><UnavailableNote label="gateway status" /><p style={{ fontSize: 11, color: 'var(--muted)' }}>gateway_state.json not found in any Hermes profile — run snapshot:generate after gateway is active.</p></div>
+          : <div className="grid grid--2">
+              {gatewayStatus.map(gw => (
+                <div key={gw.id} className="panel">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <span style={{ fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', color: 'var(--soft)' }}>{gw.profile}</span>
+                    <span className={`tag ${gw.gateway_state === 'running' ? 'tag--ok' : gw.gateway_state === 'stopped' ? 'tag--bad' : ''}`}>
+                      {gw.gateway_state}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
+                    {gw.active_agents} active agent{gw.active_agents !== 1 ? 's' : ''}
+                    {gw.updated_at ? ` · updated ${fmtTime(gw.updated_at)}` : ''}
+                  </div>
+                  {gw.platforms.length > 0
+                    ? gw.platforms.map(p => (
+                        <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderTop: '1px solid var(--line)' }}>
+                          <span className="mono" style={{ fontSize: 10 }}>{p.name}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {p.error_message && <span style={{ fontSize: 9, color: 'var(--bad)' }}>{p.error_message}</span>}
+                            <span className={`tag ${p.state === 'connected' ? 'tag--ok' : p.state === 'retrying' ? 'tag--warn' : p.state === 'disconnected' ? 'tag--bad' : ''}`}>
+                              {p.state}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    : <div style={{ fontSize: 11, color: 'var(--muted)', paddingTop: 6, borderTop: '1px solid var(--line)' }}>No platforms configured</div>
+                  }
+                  {gw.error && <div style={{ marginTop: 8, fontSize: 10, color: 'var(--bad)' }}>{gw.error}</div>}
+                </div>
+              ))}
+            </div>
+        }
+      </div>
+
+      <div className="gap-sm" />
+
+      <div className="ops-section">
+        <div className="ops-section-label">Provider model catalog</div>
+        {providerCatalog.length === 0
+          ? <div className="panel"><UnavailableNote label="provider catalog" /><p style={{ fontSize: 11, color: 'var(--muted)' }}>provider_models_cache.json not found in any Hermes profile.</p></div>
+          : <div className="table-wrap">
+              <table className="data-table" style={{ width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th>Profile</th>
+                    <th>Provider</th>
+                    <th>Models</th>
+                    <th>Cached</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {providerCatalog.map(pc => (
+                    <tr key={pc.id}>
+                      <td className="cell-muted">{pc.profile}</td>
+                      <td className="cell-strong">{pc.provider}</td>
+                      <td className="cell-mono">{pc.model_count}</td>
+                      <td className="cell-mono">{pc.cached_at ? `${fmtDate(pc.cached_at)} ${fmtTime(pc.cached_at)}` : '—'}</td>
                     </tr>
                   ))}
                 </tbody>

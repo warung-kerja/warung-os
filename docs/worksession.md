@@ -10,7 +10,9 @@ Warung OS
 
 Phase 3 — hosted-readiness and real-data hardening.
 
-Next slice: draft the auth-gated hosted mirror architecture for Warung OS: local snapshot publisher boundary, hosted read-only mirror contract, access/auth assumptions, and request/approval-based browser actions. Do not deploy or create paid services.
+Next slice: browser smoke test of gateway/provider UI; then assess Phase 4 readiness (hosted mirror auth gate, Supabase project choice, snapshot versioning — all require Raz approval before implementation).
+
+**Phase 3 slice completed (2026-06-01):** gateway_status and provider_catalog real data surfaced in Operations UI (Agents tab). Both sections render live snapshot data (2 profiles, 5 providers, 90 models) and show `—unavailable—` in fixture fallback mode. Build passing, validation confirmed.
 
 ## Source of truth
 

@@ -20,6 +20,8 @@ import {
   syncRequestFixtures,
   workspaceSignalFixture,
   hermesModelHealthFixtures,
+  gatewayStatusFixtures,
+  providerCatalogFixtures,
   dotDelegationFixtures,
   wikiFixtures,
 } from './fixtures'
@@ -51,8 +53,8 @@ function buildFixtureData(): WarungData {
     workspaceSignal: workspaceSignalFixture,
     hermesModelHealth: hermesModelHealthFixtures,
     dotDelegation: dotDelegationFixtures,
-    gatewayStatus: [],
-    providerCatalog: [],
+    gatewayStatus: gatewayStatusFixtures,
+    providerCatalog: providerCatalogFixtures,
     wiki: wikiFixtures,
   }
 }
