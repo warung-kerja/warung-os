@@ -730,8 +730,8 @@ const snapshot = {
       {
         id: 'db-snap-2',
         type: 'next',
-        title: 'Next: Phase 2 QA and handoff (Task 8)',
-        body: 'Build validation, browser smoke test, secret scan, and Obsidian/TickTick tracker updates.',
+        title: 'Phase 2 complete — next: decide Wiki scope with Raz',
+        body: 'Phase 2 adapters QA passed. Remaining open decisions: Wiki ingestion folders, snapshot commit policy, Phase 3 scope.',
         time: 'Phase 2',
         project: 'warung-os',
       },
@@ -754,7 +754,7 @@ const snapshot = {
         parent_agent: null,
         synced_at: nowISO,
         status: 'active',
-        current_task: 'Coordinating Phase 2 data adapters',
+        current_task: 'Phase 2 QA and handoff review',
       },
       {
         id: 'mia',
@@ -765,7 +765,7 @@ const snapshot = {
         parent_agent: 'baro',
         synced_at: nowISO,
         status: 'active',
-        current_task: 'Phase 2 Task 7 — TickTick Warung OS board adapter',
+        current_task: 'Phase 2 Task 8 — QA and handoff',
       },
       {
         id: 'gabs',
@@ -813,7 +813,7 @@ const snapshot = {
         trigger: 'manual',
         source_host: 'local',
         summary: {
-          type: 'hermes-cron-provider-obsidian-projects-ticktick-adapter',
+          type: 'phase2-all-adapters',
           git_signals: gitResult.ok ? 'ok' : 'failed',
           cron_adapter: cronJobs.some(job => job.status === 'bad') ? 'failed' : 'ok',
           provider_health: modelHealth.some(model => model.status === 'bad') ? 'failed' : 'config_only',

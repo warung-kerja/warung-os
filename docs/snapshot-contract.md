@@ -1,7 +1,7 @@
 # Warung OS — Snapshot Contract
 
 **Schema version:** `1`
-**Updated:** 2026-06-01 (Task 7 — TickTick Warung OS board adapter)
+**Updated:** 2026-06-01 (Task 8 — Phase 2 QA and handoff)
 **Owner:** Mia (tech lead)
 
 ---
@@ -102,7 +102,7 @@ is older than the threshold.
 
 ---
 
-## Adapter status (as of Task 7)
+## Adapter status (as of Task 8 — Phase 2 complete)
 
 | Adapter | Status | Data source |
 |---------|--------|-------------|

@@ -180,22 +180,27 @@
 6. Run `npm run build`.
 7. Commit: `feat: collect Warung OS TickTick board snapshot`.
 
-## Task 8: QA and handoff
+## Task 8: QA and handoff ✓ DONE
 
 **Objective:** Prove Phase 2 is safe and useful before expanding sources.
 
-**Files:**
-- Modify: `docs/phase-1-handoff.md` or create `docs/phase-2-handoff.md`.
-- Modify: `README.md`.
+**Completed 2026-06-01 by Mia.**
 
-**Steps:**
-1. Run `npm run build`.
-2. Run snapshot generation.
-3. Start local dev server and browser-smoke all pages.
-4. Secret-scan tracked source and generated snapshots.
-5. Confirm Operations data labels show Hermes-only scope.
-6. Update Obsidian tracker and TickTick.
-7. Commit: `docs: add Phase 2 adapter handoff`.
+**Files changed:**
+- Created: `docs/phase-2-handoff.md` — full Phase 2 handoff with QA evidence and open decisions.
+- Modified: `scripts/generate-snapshot.mjs` — updated stale team_member task labels, sync_run type string.
+
+**Validation:**
+- `npm run snapshot:generate` → ok (6/8 sources ok, is_demo: false, scope: hermes-only, 1 cron job, 10 projects, 13 TickTick tasks).
+- `npm run build` → clean (39 modules, 0 errors).
+- Dev server: started on port 5174, no errors.
+- Secret scan: clean on tracked source and generated snapshot.
+- Privacy: folder_path null on all projects, kanban tasks have no description/comments fields, cron jobs contain sanitized scheduler metadata only (no prompts/delivery targets/chat IDs).
+
+**Mia QA actions completed after worker slice:**
+- Browser smoke test passed: Home, Active Projects, Operations, and Wiki tabs render; Operations shows `DATA SOURCE: SNAPSHOT · HERMES-ONLY`.
+- Obsidian tracker updated with Task 8 QA evidence and Phase 3 decision asks.
+- Commit target: `docs: add Phase 2 adapter handoff`.
 
 ---
 
