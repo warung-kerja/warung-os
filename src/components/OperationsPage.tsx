@@ -41,21 +41,31 @@ function fmtTimestamp(iso: string): string {
 
 function auditActionLabel(action: AuditLogEntry['action']): string {
   switch (action) {
-    case 'approval_granted':        return 'Approved'
-    case 'approval_rejected':       return 'Rejected'
-    case 'changes_requested':       return 'Changes requested'
-    case 'approval_blocked':        return 'Blocked'
+    case 'approval_granted':         return 'Approved'
+    case 'approval_rejected':        return 'Rejected'
+    case 'changes_requested':        return 'Changes requested'
+    case 'approval_blocked':         return 'Blocked'
     case 'manual_refresh_requested': return 'Manual refresh'
+    case 'view_run_log':             return 'Opened run log'
+    case 'view_source_notes':        return 'Viewed source notes'
+    case 'focus_approved':           return 'Focus approved'
+    case 'sync_obsidian_requested':  return 'Obsidian sync requested'
+    case 'review_queue_requested':   return 'Review queue requested'
   }
 }
 
 function auditActionTagClass(action: AuditLogEntry['action']): string {
   switch (action) {
-    case 'approval_granted':        return 'tag--ok'
-    case 'approval_rejected':       return 'tag--bad'
-    case 'changes_requested':       return 'tag--warn'
-    case 'approval_blocked':        return 'tag--warn'
+    case 'approval_granted':         return 'tag--ok'
+    case 'approval_rejected':        return 'tag--bad'
+    case 'changes_requested':        return 'tag--warn'
+    case 'approval_blocked':         return 'tag--warn'
     case 'manual_refresh_requested': return 'tag--signal'
+    case 'view_run_log':             return 'tag--blue'
+    case 'view_source_notes':        return 'tag--blue'
+    case 'focus_approved':           return 'tag--ok'
+    case 'sync_obsidian_requested':  return 'tag--signal'
+    case 'review_queue_requested':   return 'tag--signal'
   }
 }
 
@@ -429,6 +439,7 @@ function AutomationTab({ data }: { data: WarungData }) {
                       <th>Agent</th>
                       <th>Schedule</th>
                       <th>Status</th>
+                      <th>Runs</th>
                       <th>Last run</th>
                       <th>Next run</th>
                       <th>Duration</th>
@@ -436,7 +447,10 @@ function AutomationTab({ data }: { data: WarungData }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {cronJobs.map(cj => (
+                    {cronJobs.map(cj => {
+                      // last timestamp from filesystem output filenames (may differ from jobs.json last_run_at)
+                      const fsLastRun = cj.recent_run_timestamps?.[cj.recent_run_timestamps.length - 1] ?? null
+                      return (
                       <tr key={cj.id}>
                         <td className="cell-strong">{cj.name}</td>
                         <td className="cell-muted">{cj.agent}</td>
@@ -451,12 +465,24 @@ function AutomationTab({ data }: { data: WarungData }) {
                                 : <span className="tag tag--bad">bad</span>
                           }
                         </td>
-                        <td className="cell-mono">{fmtTime(cj.last_run_at)}</td>
+                        <td
+                          className="cell-mono"
+                          title={cj.recent_run_timestamps?.join(', ') ?? undefined}
+                        >
+                          {cj.run_count != null ? cj.run_count : '—'}
+                        </td>
+                        <td className="cell-mono">
+                          {cj.last_run_at
+                            ? fmtTime(cj.last_run_at)
+                            : fsLastRun
+                              ? fmtTime(fsLastRun)
+                              : '—'}
+                        </td>
                         <td className="cell-mono">{cj.next_run_at ? fmtTime(cj.next_run_at) : '—'}</td>
                         <td className="cell-mono">{cj.duration_ms != null ? `${(cj.duration_ms / 1000).toFixed(1)}s` : '—'}</td>
                         <td className="cell-muted" style={{ fontSize: 10, maxWidth: 200 }}>{cj.error ?? '—'}</td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               </div>
@@ -908,7 +934,7 @@ function AuditTab() {
 export default function OperationsPage() {
   const [activeTab, setActiveTab] = useState<OpsTab>('overview')
   const { data, isLoading, loadError } = useWarungData()
-  const { auditLog, requestManualRefresh } = useLocalState()
+  const { auditLog, requestManualRefresh, recordView } = useLocalState()
 
   let sourceLabel = 'FIXTURE'
   if (isLoading) {
@@ -948,7 +974,15 @@ export default function OperationsPage() {
           >
             Manual refresh
           </button>
-          <button className="btn btn--primary">Open run log</button>
+          <button
+            className="btn btn--primary"
+            onClick={() => {
+              recordView('run-log', 'Run log', 'view_run_log')
+              setActiveTab('automation')
+            }}
+          >
+            Open run log
+          </button>
         </div>
       </div>
 

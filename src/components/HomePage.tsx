@@ -34,7 +34,7 @@ function approvalTagClass(status: ApprovalStatus): string {
 
 export default function HomePage() {
   const { data } = useWarungData()
-  const { localApprovalStates, updateApprovalStatus } = useLocalState()
+  const { localApprovalStates, updateApprovalStatus, recordView } = useLocalState()
   const { projects, approvals, dailyBrief } = data
 
   const effectiveApprovals = approvals.map(ap => ({
@@ -60,8 +60,25 @@ export default function HomePage() {
           </p>
         </div>
         <div className="page-actions">
-          <button className="btn">View source notes</button>
-          <button className="btn btn--primary">Approve focus</button>
+          <button
+            className="btn"
+            onClick={() => recordView('source-notes', 'Source notes', 'view_source_notes')}
+          >
+            View source notes
+          </button>
+          <button
+            className="btn btn--primary"
+            onClick={() => {
+              const firstPending = effectiveApprovals.find(a => a.status === 'pending')
+              if (firstPending) {
+                updateApprovalStatus(firstPending.id, firstPending.title, 'approved')
+              } else {
+                recordView('focus', primaryFocus?.title ?? 'Focus', 'focus_approved')
+              }
+            }}
+          >
+            Approve focus
+          </button>
         </div>
       </div>
 
@@ -113,7 +130,24 @@ export default function HomePage() {
               <div className="mono" style={{ marginBottom: 6 }}>Primary decision</div>
               <p>{primaryFocus.title}</p>
               <p style={{ marginTop: 6, color: 'var(--muted)', fontSize: 11 }}>{primaryFocus.body}</p>
-              <button className="btn btn--primary" style={{ marginTop: 10 }}>
+              <button
+                className="btn btn--primary"
+                style={{ marginTop: 10 }}
+                onClick={() => {
+                  // Approve the first approval item matching the primaryFocus project, if any.
+                  const match = primaryFocus
+                    ? effectiveApprovals.find(
+                        a => a.project === primaryFocus.project &&
+                          (a.status === 'pending' || a.status === 'changes_requested')
+                      )
+                    : null
+                  if (match) {
+                    updateApprovalStatus(match.id, match.title, 'approved')
+                  } else {
+                    recordView('structure', primaryFocus?.title ?? 'Structure', 'focus_approved')
+                  }
+                }}
+              >
                 Mark structure approved
               </button>
             </div>

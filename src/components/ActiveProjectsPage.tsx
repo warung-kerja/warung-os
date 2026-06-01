@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useWarungData } from '../data/dataSource'
+import { useLocalState } from '../data/localState'
 import type { CanonicalProject, CanonicalTeamMember, ApprovalItem } from '../types/warung-os'
 
 function statusTag(status: string | null): JSX.Element {
@@ -30,8 +31,21 @@ function fmtDate(iso: string | null): string {
   return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 }
 
-function ProjectDetail({ project, approvals, allTeamMembers }: { project: CanonicalProject; approvals: ApprovalItem[]; allTeamMembers: CanonicalTeamMember[] }) {
+function ProjectDetail({
+  project,
+  approvals,
+  allTeamMembers,
+  approvalOverrides,
+  updateApprovalStatus,
+}: {
+  project: CanonicalProject
+  approvals: ApprovalItem[]
+  allTeamMembers: CanonicalTeamMember[]
+  approvalOverrides: Record<string, ApprovalItem['status']>
+  updateApprovalStatus: (id: string, title: string, status: ApprovalItem['status']) => void
+}) {
   const approval = approvals.find(a => a.project === project.id)
+  const effectiveApproval = approval ? { ...approval, status: approvalOverrides[approval.id] ?? approval.status } : null
   const owner = allTeamMembers.find(m => m.name === project.owner)
   const teamMembers = (project.team ?? []).map(name => allTeamMembers.find(m => m.name === name)).filter(Boolean)
 
@@ -95,12 +109,12 @@ function ProjectDetail({ project, approvals, allTeamMembers }: { project: Canoni
 
         <div className="panel panel--alt">
           <div className="mono" style={{ marginBottom: 10 }}>Approval module</div>
-          {approval ? (
+          {effectiveApproval ? (
             <>
-              <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>{approval.title}</p>
-              <p style={{ marginBottom: 10 }}>{approval.description}</p>
-              <span className={`tag ${approval.status === 'pending' ? 'tag--signal' : approval.status === 'blocked' ? 'tag--warn' : 'tag--ok'}`}>
-                {approval.status.replace('_', ' ')}
+              <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>{effectiveApproval.title}</p>
+              <p style={{ marginBottom: 10 }}>{effectiveApproval.description}</p>
+              <span className={`tag ${effectiveApproval.status === 'pending' ? 'tag--signal' : effectiveApproval.status === 'blocked' ? 'tag--warn' : effectiveApproval.status === 'rejected' ? 'tag--bad' : 'tag--ok'}`}>
+                {effectiveApproval.status.replace('_', ' ')}
               </span>
 
               <div className="approval-flow-grid" style={{ marginTop: 12 }}>
@@ -123,9 +137,24 @@ function ProjectDetail({ project, approvals, allTeamMembers }: { project: Canoni
               </div>
 
               <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                <button className="btn btn--primary">Approve</button>
-                <button className="btn">Request changes</button>
-                <button className="btn btn--ghost">Decline</button>
+                <button
+                  className="btn btn--primary"
+                  onClick={() => updateApprovalStatus(effectiveApproval.id, effectiveApproval.title, 'approved')}
+                >
+                  Approve
+                </button>
+                <button
+                  className="btn"
+                  onClick={() => updateApprovalStatus(effectiveApproval.id, effectiveApproval.title, 'changes_requested')}
+                >
+                  Request changes
+                </button>
+                <button
+                  className="btn btn--ghost"
+                  onClick={() => updateApprovalStatus(effectiveApproval.id, effectiveApproval.title, 'rejected')}
+                >
+                  Decline
+                </button>
               </div>
               <p style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>
                 Actions are request-state placeholders — no live write in Phase 1.
@@ -145,6 +174,7 @@ function ProjectDetail({ project, approvals, allTeamMembers }: { project: Canoni
 
 export default function ActiveProjectsPage() {
   const { data } = useWarungData()
+  const { localApprovalStates, updateApprovalStatus, recordView } = useLocalState()
   const { projects, approvals, teamMembers } = data
   const [selectedId, setSelectedId] = useState<string | null>(projects[0]?.id ?? null)
   const selectedProject = projects.find(p => p.id === selectedId) ?? null
@@ -161,8 +191,18 @@ export default function ActiveProjectsPage() {
           </p>
         </div>
         <div className="page-actions">
-          <button className="btn">Sync Obsidian</button>
-          <button className="btn btn--primary">New review queue</button>
+          <button
+            className="btn"
+            onClick={() => recordView('obsidian-sync', 'Obsidian sync', 'sync_obsidian_requested')}
+          >
+            Sync Obsidian
+          </button>
+          <button
+            className="btn btn--primary"
+            onClick={() => recordView('review-queue', 'New review queue', 'review_queue_requested')}
+          >
+            New review queue
+          </button>
         </div>
       </div>
 
@@ -202,7 +242,15 @@ export default function ActiveProjectsPage() {
         ))}
       </div>
 
-      {selectedProject && <ProjectDetail project={selectedProject} approvals={approvals} allTeamMembers={teamMembers} />}
+      {selectedProject && (
+        <ProjectDetail
+          project={selectedProject}
+          approvals={approvals}
+          allTeamMembers={teamMembers}
+          approvalOverrides={localApprovalStates}
+          updateApprovalStatus={updateApprovalStatus}
+        />
+      )}
 
       <div className="gap" />
 

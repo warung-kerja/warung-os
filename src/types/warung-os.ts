@@ -274,6 +274,11 @@ export type AuditAction =
   | 'changes_requested'
   | 'approval_blocked'
   | 'manual_refresh_requested'
+  | 'view_run_log'
+  | 'view_source_notes'
+  | 'focus_approved'
+  | 'sync_obsidian_requested'
+  | 'review_queue_requested'
 
 export interface AuditLogEntry {
   id: string

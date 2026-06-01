@@ -1,7 +1,7 @@
 # Warung OS — Snapshot Contract
 
 **Schema version:** `1`
-**Updated:** 2026-06-01 (Task 8 — Phase 2 QA and handoff)
+**Updated:** 2026-06-02 (Phase 4 — run history UI, dead-button hardening)
 **Owner:** Mia (tech lead)
 
 ---
@@ -150,6 +150,7 @@ is older than the threshold.
 - Filename format: `YYYY-MM-DD_HH-MM-SS.md` — timestamp-only information, no content read.
 - Enriches each cron job row with: `run_count` (total output files) and `recent_run_timestamps` (last 5).
 - If `cron/output/` is absent or a job has no output files, those fields are omitted.
+- UI: AutomationTab displays `run_count` in a `Runs` column; hover title shows `recent_run_timestamps`. Falls back to most recent filesystem timestamp when `last_run_at` is absent from metadata.
 
 ### Hosted mirror direction
 

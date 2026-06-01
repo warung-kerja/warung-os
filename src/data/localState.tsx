@@ -15,6 +15,8 @@ export interface LocalStateContextValue {
   auditLog: AuditLogEntry[]
   updateApprovalStatus: (id: string, title: string, status: ApprovalStatus) => void
   requestManualRefresh: (requestedBy?: string) => void
+  // Records a view/acknowledgment event in the audit log — no state mutation, no disk/network write.
+  recordView: (id: string, title: string, action: AuditAction) => void
 }
 
 const LocalStateContext = createContext<LocalStateContextValue | null>(null)
@@ -52,6 +54,10 @@ export function LocalStateProvider({ children }: { children: ReactNode }) {
     addAuditEntry(action, id, title, 'Raz')
   }, [addAuditEntry])
 
+  const recordView = useCallback((id: string, title: string, action: AuditAction) => {
+    addAuditEntry(action, id, title, 'Raz')
+  }, [addAuditEntry])
+
   const requestManualRefresh = useCallback((requestedBy = 'Raz') => {
     const id = uid('req')
     const req: SyncRequest = {
@@ -75,6 +81,7 @@ export function LocalStateProvider({ children }: { children: ReactNode }) {
       auditLog,
       updateApprovalStatus,
       requestManualRefresh,
+      recordView,
     }}>
       {children}
     </LocalStateContext.Provider>
