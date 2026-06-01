@@ -10,7 +10,9 @@ Warung OS
 
 Phase 4 — approvals and audit trail.
 
-Next slice: add local-only approval request records and audit-log UX for Warung OS manual refresh/action requests. Keep all actions as request-state placeholders only; no external publishing, messaging, deployment, or remote command execution.
+Next slice: harden local-only action request UX by wiring remaining safe placeholders (for example run-log/open-detail buttons) into request-state records and audit entries. Keep all actions as local session placeholders only; no external publishing, messaging, deployment, or remote command execution.
+
+**Phase 4 slice completed (2026-06-01):** added in-memory LocalStateProvider, session audit log tab, local manual-refresh request records, and local approval status actions. Header, Overview, and Sources manual refresh buttons now create pending SyncRequest records and audit entries only — no disk writes, network calls, external publishing, or remote execution.
 
 **Phase 3 slice completed (2026-06-01):** gateway_status and provider_catalog real data surfaced in Operations UI (Agents tab). Both sections render live snapshot data (2 profiles, 5 providers, 90 models). Build and browser smoke test passed; pushed in commit `c426392`.
 

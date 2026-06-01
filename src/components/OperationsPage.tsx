@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import type { WarungData } from '../types/snapshot'
+import type { AuditLogEntry } from '../types/warung-os'
 import { useWarungData } from '../data/dataSource'
+import { useLocalState } from '../data/localState'
 
-type OpsTab = 'overview' | 'usage' | 'automation' | 'sources' | 'workspace' | 'agents'
+type OpsTab = 'overview' | 'usage' | 'automation' | 'sources' | 'workspace' | 'agents' | 'audit'
 
 const opsTabs: { id: OpsTab; label: string }[] = [
   { id: 'overview',   label: 'Overview' },
@@ -11,6 +13,7 @@ const opsTabs: { id: OpsTab; label: string }[] = [
   { id: 'sources',    label: 'Sources' },
   { id: 'workspace',  label: 'Workspace' },
   { id: 'agents',     label: 'Agents' },
+  { id: 'audit',      label: 'Audit' },
 ]
 
 function fmtTokens(n: number): string {
@@ -29,6 +32,31 @@ function fmtDate(iso: string | null): string {
   if (!iso) return '—'
   const d = new Date(iso)
   return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+}
+
+function fmtTimestamp(iso: string): string {
+  const d = new Date(iso)
+  return d.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
+function auditActionLabel(action: AuditLogEntry['action']): string {
+  switch (action) {
+    case 'approval_granted':        return 'Approved'
+    case 'approval_rejected':       return 'Rejected'
+    case 'changes_requested':       return 'Changes requested'
+    case 'approval_blocked':        return 'Blocked'
+    case 'manual_refresh_requested': return 'Manual refresh'
+  }
+}
+
+function auditActionTagClass(action: AuditLogEntry['action']): string {
+  switch (action) {
+    case 'approval_granted':        return 'tag--ok'
+    case 'approval_rejected':       return 'tag--bad'
+    case 'changes_requested':       return 'tag--warn'
+    case 'approval_blocked':        return 'tag--warn'
+    case 'manual_refresh_requested': return 'tag--signal'
+  }
 }
 
 function VertBarChart({ values, labels, maxValue, colorClass }: {
@@ -80,7 +108,9 @@ function UnavailableNote({ label }: { label: string }) {
 }
 
 function OverviewTab({ data }: { data: WarungData }) {
-  const { cronJobs, agentTokenDaily, hermesModelHealth, syncRuns, syncRequests, gatewayStatus } = data
+  const { cronJobs, agentTokenDaily, hermesModelHealth, syncRuns, gatewayStatus } = data
+  const { localSyncRequests, requestManualRefresh } = useLocalState()
+  const syncRequests = [...localSyncRequests, ...data.syncRequests]
 
   const cronOk    = cronJobs.filter(c => c.enabled && c.status === 'ok').length
   const cronTotal = cronJobs.filter(c => c.enabled).length
@@ -198,9 +228,11 @@ function OverviewTab({ data }: { data: WarungData }) {
                 ))
               : <div style={{ fontSize: 11, color: 'var(--muted)', padding: '6px 0' }}>No pending requests</div>
             }
-            <button className="btn" style={{ marginTop: 10 }}>Request manual refresh</button>
+            <button className="btn" style={{ marginTop: 10 }} onClick={() => requestManualRefresh()}>
+              Request manual refresh
+            </button>
             <p style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6 }}>
-              Sends a SyncRequest record — no arbitrary command execution.
+              Creates a SyncRequest record (pending) — no arbitrary command execution. Logged in Audit tab.
             </p>
           </div>
         </div>
@@ -436,7 +468,9 @@ function AutomationTab({ data }: { data: WarungData }) {
 }
 
 function SourcesTab({ data }: { data: WarungData }) {
-  const { sourceHealth, syncRuns, syncRequests } = data
+  const { sourceHealth, syncRuns } = data
+  const { localSyncRequests, requestManualRefresh } = useLocalState()
+  const syncRequests = [...localSyncRequests, ...data.syncRequests]
   return (
     <>
       <div className="ops-section">
@@ -523,17 +557,23 @@ function SourcesTab({ data }: { data: WarungData }) {
             </div>
         }
         <div style={{ marginTop: 14 }}>
-          <button className="btn">Request manual refresh</button>
+          <button className="btn" onClick={() => requestManualRefresh()}>Request manual refresh</button>
           <span style={{ fontSize: 10, color: 'var(--muted)', marginLeft: 12 }}>
-            Creates a SyncRequest record — request-state only, no arbitrary exec.
+            Creates a SyncRequest record (pending) — request-state only, no arbitrary exec. Logged in Audit tab.
           </span>
         </div>
         {syncRequests.length > 0 && (
           <div style={{ marginTop: 12 }}>
-            <div className="mono" style={{ marginBottom: 8 }}>Pending requests</div>
+            <div className="mono" style={{ marginBottom: 8 }}>Sync requests</div>
             {syncRequests.map(req => (
               <div key={req.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderTop: '1px solid var(--line)' }}>
-                <span style={{ fontSize: 11, color: 'var(--soft)' }}>{req.requested_by ?? 'system'} · {fmtTime(req.requested_at)}</span>
+                <div>
+                  <span style={{ fontSize: 11, color: 'var(--soft)' }}>{req.requested_by ?? 'system'}</span>
+                  <span style={{ fontSize: 10, color: 'var(--muted)', marginLeft: 8 }}>{fmtTime(req.requested_at)} {fmtDate(req.requested_at)}</span>
+                  {localSyncRequests.some(r => r.id === req.id) && (
+                    <span className="tag" style={{ marginLeft: 8, fontSize: 8 }}>this session</span>
+                  )}
+                </div>
                 <span className={`tag ${req.status === 'pending' ? 'tag--signal' : req.status === 'completed' ? 'tag--ok' : req.status === 'failed' ? 'tag--bad' : ''}`}>
                   {req.status}
                 </span>
@@ -805,9 +845,70 @@ function AgentsTab({ data }: { data: WarungData }) {
   )
 }
 
+function AuditTab() {
+  const { auditLog } = useLocalState()
+  return (
+    <div className="ops-section">
+      <div className="ops-section-label">
+        Session audit log
+        {auditLog.length > 0 && (
+          <span className="mono" style={{ marginLeft: 10, color: 'var(--ok)' }}>
+            {auditLog.length} entr{auditLog.length === 1 ? 'y' : 'ies'} this session
+          </span>
+        )}
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 12, fontFamily: 'var(--mono)', letterSpacing: '0.04em' }}>
+        Local only — clears on page refresh. Records approvals and manual refresh requests made in this session.
+        No state is written to disk or sent externally.
+      </div>
+      {auditLog.length === 0 ? (
+        <div className="panel">
+          <div style={{ padding: '12px 0', color: 'var(--muted)', fontSize: 11, fontFamily: 'var(--mono)', letterSpacing: '0.04em' }}>
+            —no entries yet—
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--muted)' }}>
+            Approve or reject items in the approval queue on Home, or request a manual refresh
+            on the Sources or Overview tab. Each action is recorded here with a timestamp.
+          </p>
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table className="data-table" style={{ width: '100%' }}>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Action</th>
+                <th>Target</th>
+                <th>Actor</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {auditLog.map(entry => (
+                <tr key={entry.id}>
+                  <td className="cell-mono">{fmtTimestamp(entry.timestamp)}</td>
+                  <td>
+                    <span className={`tag ${auditActionTagClass(entry.action)}`}>
+                      {auditActionLabel(entry.action)}
+                    </span>
+                  </td>
+                  <td style={{ color: 'var(--soft)', fontSize: 11, maxWidth: 320 }}>{entry.target_title}</td>
+                  <td className="cell-muted">{entry.actor}</td>
+                  <td className="cell-muted" style={{ fontSize: 10 }}>{entry.note ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function OperationsPage() {
   const [activeTab, setActiveTab] = useState<OpsTab>('overview')
   const { data, isLoading, loadError } = useWarungData()
+  const { auditLog, requestManualRefresh } = useLocalState()
 
   let sourceLabel = 'FIXTURE'
   if (isLoading) {
@@ -838,7 +939,15 @@ export default function OperationsPage() {
           </div>
         </div>
         <div className="page-actions">
-          <button className="btn">Manual refresh</button>
+          <button
+            className="btn"
+            onClick={() => {
+              requestManualRefresh()
+              setActiveTab('audit')
+            }}
+          >
+            Manual refresh
+          </button>
           <button className="btn btn--primary">Open run log</button>
         </div>
       </div>
@@ -851,6 +960,11 @@ export default function OperationsPage() {
             onClick={() => setActiveTab(tab.id)}
           >
             {tab.label}
+            {tab.id === 'audit' && auditLog.length > 0 && (
+              <span style={{ marginLeft: 5, fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--signal)' }}>
+                {auditLog.length}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -861,6 +975,7 @@ export default function OperationsPage() {
       {activeTab === 'sources'    && <SourcesTab data={data} />}
       {activeTab === 'workspace'  && <WorkspaceTab data={data} />}
       {activeTab === 'agents'     && <AgentsTab data={data} />}
+      {activeTab === 'audit'      && <AuditTab />}
     </div>
   )
 }

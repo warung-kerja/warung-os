@@ -265,3 +265,22 @@ export interface TickTickKanbanBoard {
   collected_at: string
   cache_age_hours: number | null
 }
+
+// ---- AUDIT LOG ----
+
+export type AuditAction =
+  | 'approval_granted'
+  | 'approval_rejected'
+  | 'changes_requested'
+  | 'approval_blocked'
+  | 'manual_refresh_requested'
+
+export interface AuditLogEntry {
+  id: string
+  action: AuditAction
+  target_id: string
+  target_title: string
+  actor: string
+  timestamp: string
+  note: string | null
+}
