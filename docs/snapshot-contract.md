@@ -101,14 +101,16 @@ is older than the threshold.
 
 ---
 
-## Adapter status (as of Task 8 — Phase 2 complete)
+## Adapter status (as of Phase 3 — hosted mirror architecture draft)
 
 | Adapter | Status | Data source |
 |---------|--------|-------------|
 | `workspace_signal` | **Real** | `git log`, `git status --porcelain` on warung-os repo |
-| `source_health` | **Real** | `fs.stat` on snapshot, Hermes cron/config files, Obsidian projects dir, TickTick cache file + `git status` |
-| `cron_jobs` | **Real (sanitized)** | All discovered Hermes profile `cron/jobs.json` files; prompts, delivery targets, and chat IDs omitted |
+| `source_health` | **Real** | `fs.stat` on snapshot, Hermes cron/config/gateway/provider-cache files, Obsidian dirs, TickTick cache file + `git status`. Covers all discovered Hermes profiles. |
+| `cron_jobs` | **Real (sanitized)** | All discovered Hermes profile `cron/jobs.json` files; prompts, delivery targets, and chat IDs omitted. Enriched with run counts and recent timestamps from `cron/output/` filenames (no file contents read). |
 | `hermes_model_health` | **Partial** | All discovered Hermes profile `config.yaml` model/provider metadata; no live API/latency check |
+| `gateway_status` | **Real** | All discovered Hermes profile `gateway_state.json` files; gateway state, active agent count, and platform connectivity states (name + state only — no credentials or tokens) |
+| `provider_catalog` | **Real** | All discovered Hermes profile `provider_models_cache.json` files; provider names and model counts only — no API keys or credentials |
 | `projects.items` | **Real (frontmatter only)** | `03_Active_Projects/` folder scan; YAML frontmatter parsed; folder paths redacted; body not read |
 | `projects.kanban_boards` | **Real when cache populated** | `scripts/collect-ticktick.py` writes cache to Hermes profile; generator reads it. Task titles, columns, priorities only — no descriptions or comments. Run `npm run ticktick:collect` first. |
 | `agent_token_daily` | Unavailable | Hermes log adapter not yet connected |
@@ -126,9 +128,34 @@ is older than the threshold.
 - Emits `source_path` relative to the approved folder, e.g. `05_1%_Journal/<note>.md`.
 - Does not expose the absolute Obsidian vault path.
 
+### gateway_status adapter detail
+
+- Reads `gateway_state.json` from every discovered Hermes profile directory.
+- Fields extracted: `gateway_state` (running/stopped/unknown), `active_agents` count, and per-platform `name` + `state` + `error_message`.
+- Platform credentials, tokens, channel IDs, and webhook URLs are never in `gateway_state.json` — those live in separate credential stores not read by the generator.
+- If `gateway_state.json` is absent for a profile: no row emitted for that profile; adapter warning logged.
+- Profile names are included (e.g. `default`, `tech-director`).
+
+### provider_catalog adapter detail
+
+- Reads `provider_models_cache.json` from every discovered Hermes profile directory.
+- Fields extracted per provider: provider name, model count, and cache timestamp (`at` Unix float → ISO string).
+- Model names and IDs are deliberately not collected — only counts per provider are included.
+- No API keys, credentials, or endpoint URLs are read or emitted.
+- If the cache file is absent for a profile: no row emitted for that profile.
+
+### cron_jobs run history enrichment detail
+
+- After reading `cron/jobs.json`, the generator reads **filenames only** from `cron/output/<job_id>/`.
+- Filename format: `YYYY-MM-DD_HH-MM-SS.md` — timestamp-only information, no content read.
+- Enriches each cron job row with: `run_count` (total output files) and `recent_run_timestamps` (last 5).
+- If `cron/output/` is absent or a job has no output files, those fields are omitted.
+
 ### Hosted mirror direction
 
 Warung OS is expected to become accessible from Raz's other computers, similar to Mission Control Online. The approved direction is an auth-gated hosted snapshot mirror fed by curated local snapshots/sync bridge data. Browser actions must remain requests/approvals, not arbitrary remote command execution.
+
+See `docs/hosted-mirror-architecture.md` for the full Phase 5 architecture draft.
 
 ### projects.kanban_boards adapter detail
 

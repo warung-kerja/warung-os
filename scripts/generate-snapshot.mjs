@@ -385,7 +385,7 @@ function collectSourceHealth() {
     modified_at: null,
     age_hours: null,
     status: 'bad',
-    error: 'Token usage adapter not connected — Phase 2 adapter pending',
+    error: 'Token usage adapter not connected — Phase 3 scope; requires Hermes log adapter',
     synced_at: nowISO,
   })
 
@@ -1070,7 +1070,7 @@ const snapshot = {
         id: 'db-snap-1',
         type: 'info',
         title: 'Snapshot generated',
-        body: `Snapshot generated at ${nowISO}. Git signals, all-profile Hermes cron/model metadata, Obsidian project metadata, approved journal wiki entries, and TickTick board cache are real local data. Token usage and dot delegation remain unavailable until adapters are connected.`,
+        body: `Snapshot generated at ${nowISO}. Git signals, all-profile Hermes cron/model/gateway/provider metadata, Obsidian project metadata, approved journal wiki entries, and TickTick board cache are real local data. Token usage and dot delegation remain unavailable until adapters are connected.`,
         time: now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }),
         project: 'warung-os',
       },
@@ -1101,9 +1101,9 @@ const snapshot = {
       {
         id: 'db-snap-2',
         type: 'next',
-        title: 'Phase 2 scope updated — next: hosted mirror architecture',
-        body: 'Wiki scope is approved as 05_1%_Journal, and Operations now scans all Hermes profiles. Remaining open decision: auth-gated hosted mirror path similar to Mission Control Online.',
-        time: 'Phase 2',
+        title: 'Phase 3 — hosted mirror architecture drafted',
+        body: 'Auth-gated hosted mirror architecture doc written (docs/hosted-mirror-architecture.md). Gateway and provider catalog adapters now documented. Open decisions: Supabase project choice, publish frequency, and snapshot versioning — requires Raz approval before Phase 5 implementation.',
+        time: 'Phase 3',
         project: 'warung-os',
       },
     ],
