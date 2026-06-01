@@ -10,7 +10,7 @@ Warung OS
 
 Phase 3 — hosted-readiness and real-data hardening.
 
-Next slice: continue the hosted-readiness path: harden the all-Hermes-profile snapshot adapters, keep Wiki ingestion scoped to `05_1%_Journal`, keep generated snapshots local/gitignored unless explicitly demo-safe, and prepare the eventual auth-gated hosted mirror pattern similar to Mission Control Online.
+Next slice: draft the auth-gated hosted mirror architecture for Warung OS: local snapshot publisher boundary, hosted read-only mirror contract, access/auth assumptions, and request/approval-based browser actions. Do not deploy or create paid services.
 
 ## Source of truth
 
