@@ -8,11 +8,11 @@ Warung OS
 
 ## Current priority
 
-Phase 3 — hosted-readiness and real-data hardening.
+Phase 4 — approvals and audit trail.
 
-Next slice: browser smoke test of gateway/provider UI; then assess Phase 4 readiness (hosted mirror auth gate, Supabase project choice, snapshot versioning — all require Raz approval before implementation).
+Next slice: add local-only approval request records and audit-log UX for Warung OS manual refresh/action requests. Keep all actions as request-state placeholders only; no external publishing, messaging, deployment, or remote command execution.
 
-**Phase 3 slice completed (2026-06-01):** gateway_status and provider_catalog real data surfaced in Operations UI (Agents tab). Both sections render live snapshot data (2 profiles, 5 providers, 90 models) and show `—unavailable—` in fixture fallback mode. Build passing, validation confirmed.
+**Phase 3 slice completed (2026-06-01):** gateway_status and provider_catalog real data surfaced in Operations UI (Agents tab). Both sections render live snapshot data (2 profiles, 5 providers, 90 models). Build and browser smoke test passed; pushed in commit `c426392`.
 
 ## Source of truth
 
