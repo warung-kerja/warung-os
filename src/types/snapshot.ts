@@ -20,6 +20,7 @@ import type {
   WikiEntry,
   HermesModelHealth,
   DotDelegationStatus,
+  TickTickKanbanBoard,
 } from './warung-os'
 
 export type SourceMode = 'fixture' | 'snapshot'
@@ -64,6 +65,7 @@ export interface WarungSnapshot {
   projects: {
     items: CanonicalProject[]
     team_members: CanonicalTeamMember[]
+    kanban_boards: TickTickKanbanBoard[]
   }
   operations: OperationsSnapshot
   wiki: {
@@ -89,6 +91,7 @@ export interface WarungData {
   // Projects
   projects: CanonicalProject[]
   teamMembers: CanonicalTeamMember[]
+  kanbanBoards: TickTickKanbanBoard[]
   // Home
   dailyBrief: DailyBriefItem[]
   approvals: ApprovalItem[]

@@ -213,3 +213,23 @@ export interface DotDelegationStatus {
   started_at: string
   last_activity_at: string
 }
+
+export interface TickTickTask {
+  id: string
+  title: string
+  column: string | null
+  column_id: string | null
+  priority: 'none' | 'low' | 'medium' | 'high' | string
+  status: number | null
+  updated_at: string | null
+}
+
+export interface TickTickKanbanBoard {
+  board_id: string
+  board_name: string
+  task_count: number
+  column_counts: Array<{ column: string; count: number }>
+  tasks: TickTickTask[]
+  collected_at: string
+  cache_age_hours: number | null
+}

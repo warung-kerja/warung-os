@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /**
  * Warung OS — Hermes-safe local snapshot generator
- * Task 6: Obsidian project tracker adapter
+ * Task 7: TickTick Warung OS board adapter
  *
  * Outputs: public/snapshots/latest.json
  * Run:     npm run snapshot:generate
  *
  * SAFETY CONTRACT:
  * - Reads only safe local sources: git log (read-only CLI), filesystem stat,
- *   sanitized Hermes cron metadata, and non-secret Hermes model config.
+ *   sanitized Hermes cron metadata, non-secret Hermes model config, and the
+ *   TickTick cache file written by scripts/collect-ticktick.py.
  * - Does NOT read session transcripts, token stores, API keys, .env files,
  *   OAuth tokens, raw memories, cron prompts, delivery targets, or credentials.
  * - source_scope: 'hermes-only' (Raz's Warung Kerja environment, warung-os repo).
@@ -18,16 +19,20 @@
  *
  * REAL data collected by this generator:
  *   workspace_signal    — warung-os git log (branch, HEAD, commits, file churn, working tree)
- *   source_health       — filesystem checks (snapshot file, git repo, cron/config, Obsidian projects dir)
+ *   source_health       — filesystem checks (snapshot file, git repo, cron/config, Obsidian projects dir, TickTick cache)
  *   cron_jobs           — sanitized Hermes profile cron job metadata from cron/jobs.json
  *   hermes_model_health — sanitized Hermes profile model config from config.yaml
  *   projects.items      — Obsidian 03_Active_Projects/ folder scan; YAML frontmatter only; folder paths redacted
+ *   projects.kanban_boards — TickTick 'Warung OS' board cache (task titles, columns, priorities; no descriptions/comments)
  *
  * PLACEHOLDER / UNAVAILABLE:
  *   agent_token_daily, model_token_daily, tool_usage_daily — requires Hermes log adapter
  *   dot_delegation  — requires live Hermes delegation tracker
  *   wiki.entries    — requires Obsidian adapter
  *   team_members    — static; requires live Hermes agent status adapter
+ *
+ * TickTick note: run `npm run ticktick:collect` first to populate the cache.
+ * The generator reads the cache file; it never handles TickTick credentials directly.
  */
 
 import { writeFileSync, readFileSync, readdirSync, mkdirSync, existsSync, statSync, openSync, readSync, closeSync } from 'fs'
@@ -43,6 +48,8 @@ const HERMES_PROFILE_DIR = '/Users/gabi/.hermes/profiles/tech-director'
 const HERMES_CRON_JOBS_FILE = join(HERMES_PROFILE_DIR, 'cron', 'jobs.json')
 const HERMES_CONFIG_FILE = join(HERMES_PROFILE_DIR, 'config.yaml')
 const OBSIDIAN_PROJECTS_DIR = '/Users/gabi/Documents/Warung Kerja 1.0/03_Active_Projects'
+// TickTick cache written by scripts/collect-ticktick.py — never read directly by this generator.
+const TICKTICK_CACHE_FILE = join(HERMES_PROFILE_DIR, 'cache', 'warung-os-ticktick-cache.json')
 // Subfolders to skip when scanning Obsidian projects
 const OBSIDIAN_SKIP_DIRS = new Set(['_archive', '_work queue', '_registry', '_work_queue'])
 
@@ -310,6 +317,32 @@ function collectSourceHealth() {
     synced_at: nowISO,
   })
 
+  // TickTick cache file (written by collect-ticktick.py)
+  const ttCacheExists = existsSync(TICKTICK_CACHE_FILE)
+  let ttCacheModifiedAt = null
+  let ttCacheAgeHours = null
+  let ttCacheStale = false
+  if (ttCacheExists) {
+    const stat = statSync(TICKTICK_CACHE_FILE)
+    ttCacheModifiedAt = new Date(stat.mtimeMs).toISOString()
+    ttCacheAgeHours = parseFloat(((now.getTime() - stat.mtimeMs) / (1000 * 60 * 60)).toFixed(2))
+    ttCacheStale = ttCacheAgeHours > 24
+  }
+  rows.push({
+    id: 'sh-ticktick-cache',
+    label: 'TickTick Warung OS board cache',
+    source_type: 'cache',
+    exists: ttCacheExists,
+    readable: ttCacheExists,
+    modified_at: ttCacheModifiedAt,
+    age_hours: ttCacheAgeHours,
+    status: ttCacheExists ? (ttCacheStale ? 'warn' : 'ok') : 'bad',
+    error: ttCacheExists
+      ? (ttCacheStale ? `Cache is ${ttCacheAgeHours}h old — run npm run ticktick:collect to refresh` : null)
+      : 'TickTick cache not found — run npm run ticktick:collect to populate',
+    synced_at: nowISO,
+  })
+
   return rows
 }
 
@@ -524,12 +557,56 @@ function collectObsidianProjects() {
   }
 }
 
+// ---- TickTick kanban cache reader ----
+// Reads the local cache file written by scripts/collect-ticktick.py.
+// Never reads credentials, API keys, or the Hermes .env file.
+// Returns unavailable state if cache is absent or unreadable.
+function collectTickTickKanban() {
+  try {
+    if (!existsSync(TICKTICK_CACHE_FILE)) {
+      return {
+        ok: false,
+        boards: [],
+        error: 'TickTick cache not found — run npm run ticktick:collect to populate',
+        cache_age_hours: null,
+      }
+    }
+
+    const stat = statSync(TICKTICK_CACHE_FILE)
+    const cacheAgeHours = parseFloat(((now.getTime() - stat.mtimeMs) / (1000 * 60 * 60)).toFixed(2))
+
+    const raw = readFileSync(TICKTICK_CACHE_FILE, 'utf8')
+    const cache = JSON.parse(raw)
+
+    // Annotate boards with observed cache age (cache file was written by collect-ticktick.py)
+    const boards = (cache.boards ?? []).map(board => ({
+      ...board,
+      cache_age_hours: cacheAgeHours,
+    }))
+
+    return {
+      ok: Boolean(cache.ok),
+      boards,
+      error: cache.error ?? null,
+      cache_age_hours: cacheAgeHours,
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      boards: [],
+      error: `TickTick cache read failed: ${String(err?.message ?? err)}`,
+      cache_age_hours: null,
+    }
+  }
+}
+
 // ---- Run all collectors ----
 const gitResult       = collectGitSignals(ROOT)
 const modelHealth     = collectModelHealth()
 const sourceHealth    = collectSourceHealth()
 const cronJobs        = collectCronHealth()
 const obsidianResult  = collectObsidianProjects()
+const ticktickResult  = collectTickTickKanban()
 const durationMs      = Date.now() - startMs
 
 // Enrich the warung-os project entry with git-derived timing (real local data).
@@ -582,6 +659,9 @@ const adapterWarnings = {
     ? `Obsidian project frontmatter collected from 03_Active_Projects/. ${obsidianResult.projects.length} folder(s) found. Structured projects: ${obsidianResult.projects.filter(p => p.registry_status === 'registered').length}. Folder paths redacted. Body content not read.`
     : `Obsidian project adapter failed: ${obsidianResult.error}`,
   wiki: 'Obsidian wiki ingestion adapter not connected — approved folders and scope not yet decided with Raz.',
+  ticktick: ticktickResult.ok
+    ? `TickTick Warung OS board cache read (${ticktickResult.boards.length} board(s), ${ticktickResult.boards.reduce((n, b) => n + b.task_count, 0)} task(s)). Cache age: ${ticktickResult.cache_age_hours}h. Task descriptions and comments excluded.`
+    : `TickTick adapter unavailable: ${ticktickResult.error}`,
 }
 
 const warnings = [
@@ -593,6 +673,9 @@ const warnings = [
   obsidianResult.ok
     ? `Obsidian project metadata collected from 03_Active_Projects/ (frontmatter only — body content not read). ${obsidianResult.projects.length} project(s) found.`
     : `Obsidian project adapter failed: ${obsidianResult.error}`,
+  ticktickResult.ok
+    ? `TickTick Warung OS board: ${ticktickResult.boards.reduce((n, b) => n + b.task_count, 0)} undone task(s). Cache age: ${ticktickResult.cache_age_hours}h.`
+    : `TickTick board adapter unavailable: ${ticktickResult.error}`,
 ]
 
 const snapshot = {
@@ -616,15 +699,39 @@ const snapshot = {
         id: 'db-snap-1',
         type: 'info',
         title: 'Snapshot generated',
-        body: `Snapshot generated at ${nowISO}. Git signals, Hermes cron metadata, and Obsidian project metadata are real local data. Token usage, wiki, and dot delegation remain unavailable until adapters are connected.`,
+        body: `Snapshot generated at ${nowISO}. Git signals, Hermes cron metadata, Obsidian project metadata, and TickTick board cache are real local data. Token usage, wiki, and dot delegation remain unavailable until adapters are connected.`,
         time: now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }),
         project: 'warung-os',
       },
+      ...(ticktickResult.ok && ticktickResult.boards.length > 0
+        ? ticktickResult.boards.map(board => {
+            const colSummary = board.column_counts
+              .slice(0, 5)
+              .map(c => `${c.column}: ${c.count}`)
+              .join(' · ')
+            return {
+              id: `db-ticktick-${board.board_id}`,
+              type: 'info',
+              title: `${board.board_name}: ${board.task_count} undone task(s)`,
+              body: colSummary || 'No tasks in board.',
+              time: `Cache ${ticktickResult.cache_age_hours}h ago`,
+              project: 'warung-os',
+            }
+          })
+        : [{
+            id: 'db-ticktick-unavail',
+            type: 'info',
+            title: 'Warung OS board: unavailable',
+            body: `TickTick cache not populated — run npm run ticktick:collect to fetch board state.`,
+            time: 'TickTick',
+            project: 'warung-os',
+          }]
+      ),
       {
         id: 'db-snap-2',
         type: 'next',
-        title: 'Next: TickTick board adapter (Task 7)',
-        body: 'Wire Warung OS TickTick board into snapshot to surface kanban task state. Then decide wiki ingestion scope with Raz (Task 8).',
+        title: 'Next: Phase 2 QA and handoff (Task 8)',
+        body: 'Build validation, browser smoke test, secret scan, and Obsidian/TickTick tracker updates.',
         time: 'Phase 2',
         project: 'warung-os',
       },
@@ -634,6 +741,8 @@ const snapshot = {
 
   projects: {
     items: projectItems,
+    // TickTick Warung OS board — sanitized cache (task titles/columns/priorities; no descriptions or comments)
+    kanban_boards: ticktickResult.boards,
     // Static placeholder — live agent status adapter not yet connected.
     team_members: [
       {
@@ -656,7 +765,7 @@ const snapshot = {
         parent_agent: 'baro',
         synced_at: nowISO,
         status: 'active',
-        current_task: 'Phase 2 Task 6 — Obsidian project tracker adapter',
+        current_task: 'Phase 2 Task 7 — TickTick Warung OS board adapter',
       },
       {
         id: 'gabs',
@@ -704,13 +813,16 @@ const snapshot = {
         trigger: 'manual',
         source_host: 'local',
         summary: {
-          type: 'hermes-cron-provider-obsidian-projects-adapter',
+          type: 'hermes-cron-provider-obsidian-projects-ticktick-adapter',
           git_signals: gitResult.ok ? 'ok' : 'failed',
           cron_adapter: cronJobs.some(job => job.status === 'bad') ? 'failed' : 'ok',
           provider_health: modelHealth.some(model => model.status === 'bad') ? 'failed' : 'config_only',
           token_adapter: 'unavailable',
           obsidian_projects_adapter: obsidianResult.ok ? `ok (${obsidianResult.projects.length} projects)` : `failed: ${obsidianResult.error}`,
           obsidian_wiki_adapter: 'unavailable',
+          ticktick_board_adapter: ticktickResult.ok
+            ? `ok (cache ${ticktickResult.cache_age_hours}h old, ${ticktickResult.boards.reduce((n, b) => n + b.task_count, 0)} tasks)`
+            : `unavailable: ${ticktickResult.error}`,
           duration_ms: durationMs,
         },
         error: gitResult.ok ? null : `git_signals_failed: ${gitResult.error}`,
@@ -743,6 +855,7 @@ console.log(`[warung-os] Model health:   ${modelHealth.length} config row(s) lis
 console.log(`[warung-os] Source health:  ${sourceHealth.filter(s => s.status === 'ok').length} ok / ${sourceHealth.length} total`)
 console.log(`[warung-os] Obsidian projects: ${obsidianResult.ok ? `ok  (${obsidianResult.projects.length} folder(s), ${obsidianResult.projects.filter(p => p.registry_status === 'registered').length} with frontmatter)` : `FAILED: ${obsidianResult.error}`}`)
 console.log(`[warung-os] Projects in snapshot: ${projectItems.length}`)
+console.log(`[warung-os] TickTick board: ${ticktickResult.ok ? `ok  (${ticktickResult.boards.reduce((n, b) => n + b.task_count, 0)} task(s), cache ${ticktickResult.cache_age_hours}h old)` : `UNAVAIL: ${ticktickResult.error}`}`)
 console.log(`[warung-os] Duration:       ${durationMs}ms`)
 console.log(`[warung-os] Warnings:`)
 warnings.forEach(w => console.log(`  - ${w}`))

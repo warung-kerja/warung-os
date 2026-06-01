@@ -1,7 +1,7 @@
 # Warung OS — Snapshot Contract
 
 **Schema version:** `1`
-**Updated:** 2026-06-01 (Task 6 — Obsidian project tracker adapter)
+**Updated:** 2026-06-01 (Task 7 — TickTick Warung OS board adapter)
 **Owner:** Mia (tech lead)
 
 ---
@@ -22,7 +22,7 @@ The snapshot contract is typed in `src/types/snapshot.ts`.
 {
   "meta":       { ... },
   "home":       { "daily_brief": [], "approvals": [] },
-  "projects":   { "items": [], "team_members": [] },
+  "projects":   { "items": [], "team_members": [], "kanban_boards": [] },
   "operations": { "source_scope": "hermes-only", ... },
   "wiki":       { "entries": [] }
 }
@@ -102,21 +102,35 @@ is older than the threshold.
 
 ---
 
-## Adapter status (as of Task 6)
+## Adapter status (as of Task 7)
 
 | Adapter | Status | Data source |
 |---------|--------|-------------|
 | `workspace_signal` | **Real** | `git log`, `git status --porcelain` on warung-os repo |
-| `source_health` | **Real** | `fs.stat` on snapshot, Hermes cron/config files, Obsidian projects dir + `git status` |
+| `source_health` | **Real** | `fs.stat` on snapshot, Hermes cron/config files, Obsidian projects dir, TickTick cache file + `git status` |
 | `cron_jobs` | **Real (sanitized)** | Active Hermes profile `cron/jobs.json`; prompts, delivery targets, and chat IDs omitted |
 | `hermes_model_health` | **Partial** | Active Hermes profile `config.yaml` model/provider metadata; no live API/latency check |
 | `projects.items` | **Real (frontmatter only)** | `03_Active_Projects/` folder scan; YAML frontmatter parsed; folder paths redacted; body not read |
+| `projects.kanban_boards` | **Real when cache populated** | `scripts/collect-ticktick.py` writes cache to Hermes profile; generator reads it. Task titles, columns, priorities only — no descriptions or comments. Run `npm run ticktick:collect` first. |
 | `agent_token_daily` | Unavailable | Hermes log adapter not yet connected |
 | `model_token_daily` | Unavailable | Hermes log adapter not yet connected |
 | `tool_usage_daily` | Unavailable | Hermes log adapter not yet connected |
 | `dot_delegation` | Unavailable | Live Hermes delegation tracker not yet connected |
 | `team_members` (projects) | Static placeholder | Live Hermes agent status adapter not yet connected |
 | `wiki.entries` | Unavailable | Scope/folders not yet approved by Raz |
+
+### projects.kanban_boards adapter detail
+
+- Populated by running `npm run ticktick:collect` (`scripts/collect-ticktick.py`).
+- The generator reads the cache file at `~/.hermes/profiles/tech-director/cache/warung-os-ticktick-cache.json`.
+- The generator **never** reads TickTick credentials directly — credentials stay inside the Python/Hermes layer.
+- Fields collected per task: `id`, `title`, `column`, `column_id`, `priority`, `status`, `updated_at`.
+- Fields deliberately excluded: task description, comments, attachments, personal notes.
+- Board in scope: `Warung OS` TickTick project only. Additional boards require explicit Raz approval.
+- Cache age is included in each board row and in the `sh-ticktick-cache` source health row.
+- If cache is absent: `kanban_boards: []`, source health row `status: "bad"`, adapter warning included.
+- If cache is stale (> 24h): source health row `status: "warn"`.
+- `is_demo: false` — cache contains real board state when populated.
 
 ### projects.items adapter detail
 
@@ -136,6 +150,9 @@ When an adapter is unavailable, the generator writes an empty array or `null` an
 
 `public/snapshots/latest.json` is gitignored — generated locally, never committed.
 `public/snapshots/.gitkeep` is tracked to preserve the directory in git.
+
+`~/.hermes/profiles/tech-director/cache/warung-os-ticktick-cache.json` lives outside the
+repo in the Hermes profile cache directory and is never committed.
 
 To share a demo snapshot, commit it as `public/snapshots/demo.json` with `is_demo: true`
 and document it clearly. Do not commit snapshots that contain real Hermes data.
