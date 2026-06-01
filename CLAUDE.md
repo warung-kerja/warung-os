@@ -27,7 +27,11 @@ Top-level pages:
 
 Critical Operations requirement: preserve Mission Control Online-style data/report parity even if the Warung OS UI differs.
 
-Operations data scope: token usage, cron/automation health, provider/fallback health, source health, sync runs, workspace signals, and agent/team status must represent Raz's Hermes agents/environment only. Do not mix in OpenClaw agents or OpenClaw telemetry.
+Operations data scope: token usage, cron/automation health, provider/fallback health, source health, sync runs, workspace signals, and agent/team status must represent Raz's Hermes environment across all Hermes profiles present now and added in the future. Do not mix in OpenClaw agents or OpenClaw telemetry.
+
+Wiki ingestion scope: use everything inside `/Users/gabi/Documents/Warung Kerja 1.0/05_1%_Journal/` as the approved Wiki source. Keep emitted source paths relative to that folder; do not expose absolute vault paths.
+
+Remote access direction: Warung OS should eventually become an auth-gated hosted snapshot mirror similar to Mission Control Online, so Raz can access it from other computers without exposing the local machine or arbitrary command execution.
 
 ## Local reference paths
 

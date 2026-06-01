@@ -10,7 +10,7 @@ Warung OS
 
 Phase 2 — Hermes data adapters.
 
-Next slice: implement the first real Hermes-only Operations adapter, prioritizing cron/provider health from safe local Hermes sources.
+Next slice: continue the hosted-readiness path: harden the all-Hermes-profile snapshot adapters, keep Wiki ingestion scoped to `05_1%_Journal`, and prepare the eventual auth-gated hosted mirror pattern similar to Mission Control Online.
 
 ## Source of truth
 
@@ -90,4 +90,4 @@ Mia may autonomously:
 
 ## Current known limitation
 
-The snapshot system is structurally ready, but the generated snapshot is still demo/fixture-backed. Real telemetry must be added carefully from safe local Hermes sources only, scoped to Raz's Hermes agents/environment — not OpenClaw.
+The snapshot system is structurally ready and now collects several real local sources. Real telemetry must be added carefully from safe local Hermes sources only, scoped across Raz's Hermes profiles now and in the future — not OpenClaw. Wiki ingestion is approved only for `05_1%_Journal` unless Raz expands scope.

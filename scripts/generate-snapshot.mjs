@@ -37,21 +37,65 @@
 
 import { writeFileSync, readFileSync, readdirSync, mkdirSync, existsSync, statSync, openSync, readSync, closeSync } from 'fs'
 import { execSync } from 'child_process'
-import { join, dirname } from 'path'
+import { join, dirname, relative } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 const OUT_DIR = join(ROOT, 'public', 'snapshots')
 const OUT_FILE = join(OUT_DIR, 'latest.json')
-const HERMES_PROFILE_DIR = '/Users/gabi/.hermes/profiles/tech-director'
+const HERMES_HOME = '/Users/gabi/.hermes'
+const HERMES_PROFILES_DIR = join(HERMES_HOME, 'profiles')
+const HERMES_PROFILE_DIR = join(HERMES_PROFILES_DIR, 'tech-director')
 const HERMES_CRON_JOBS_FILE = join(HERMES_PROFILE_DIR, 'cron', 'jobs.json')
 const HERMES_CONFIG_FILE = join(HERMES_PROFILE_DIR, 'config.yaml')
 const OBSIDIAN_PROJECTS_DIR = '/Users/gabi/Documents/Warung Kerja 1.0/03_Active_Projects'
+const OBSIDIAN_WIKI_JOURNAL_DIR = '/Users/gabi/Documents/Warung Kerja 1.0/05_1%_Journal'
 // TickTick cache written by scripts/collect-ticktick.py — never read directly by this generator.
 const TICKTICK_CACHE_FILE = join(HERMES_PROFILE_DIR, 'cache', 'warung-os-ticktick-cache.json')
 // Subfolders to skip when scanning Obsidian projects
 const OBSIDIAN_SKIP_DIRS = new Set(['_archive', '_work queue', '_registry', '_work_queue'])
+
+function safeId(value) {
+  return String(value ?? 'unknown')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'unknown'
+}
+
+function collectHermesProfiles() {
+  const profiles = []
+  // Default/root Hermes profile, retained for read-only future compatibility.
+  profiles.push({
+    name: 'default',
+    dir: HERMES_HOME,
+    cronFile: join(HERMES_HOME, 'cron', 'jobs.json'),
+    configFile: join(HERMES_HOME, 'config.yaml'),
+  })
+
+  try {
+    if (existsSync(HERMES_PROFILES_DIR)) {
+      const profileDirs = readdirSync(HERMES_PROFILES_DIR, { withFileTypes: true })
+        .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+        .map(e => e.name)
+        .sort((a, b) => a.localeCompare(b))
+
+      for (const name of profileDirs) {
+        const dir = join(HERMES_PROFILES_DIR, name)
+        profiles.push({
+          name,
+          dir,
+          cronFile: join(dir, 'cron', 'jobs.json'),
+          configFile: join(dir, 'config.yaml'),
+        })
+      }
+    }
+  } catch (_) {}
+
+  return profiles
+}
+
+const HERMES_PROFILES = collectHermesProfiles()
 
 const now = new Date()
 const nowISO = now.toISOString()
@@ -140,21 +184,38 @@ function collectGitSignals(repoPath) {
 }
 
 // ---- Hermes model/provider config ----
-// Reads only non-secret model/provider names from the active Hermes profile config.
+// Reads only non-secret model/provider names from every discovered Hermes profile config.
 // No live API health check — latency and availability are not measured here.
 function collectModelHealth() {
-  try {
-    const config = readFileSync(HERMES_CONFIG_FILE, 'utf8')
+  const rows = []
+
+  for (const profile of HERMES_PROFILES) {
+    try {
+      if (!existsSync(profile.configFile)) {
+        rows.push({
+          id: `hm-${safeId(profile.name)}-config-missing`,
+          provider: null,
+          model: null,
+          status: 'unconfigured',
+          latency_ms: null,
+          is_primary: true,
+          is_fallback: false,
+          last_checked_at: nowISO,
+          profile: profile.name,
+        })
+        continue
+      }
+
+    const config = readFileSync(profile.configFile, 'utf8')
     const modelBlock = config.match(/^model:\n((?:\s+.*\n?)*)/m)?.[1] ?? ''
     const defaultModel = modelBlock.match(/^\s+default:\s*['"]?([^'"\n#]+)['"]?/m)?.[1]?.trim() || null
     const provider = modelBlock.match(/^\s+provider:\s*['"]?([^'"\n#]+)['"]?/m)?.[1]?.trim() || null
     const fallbackLine = config.match(/^fallback_providers:\s*(.*)$/m)?.[1]?.trim() ?? '[]'
     const hasFallback = fallbackLine !== '[]' && fallbackLine !== ''
 
-    const rows = []
     if (defaultModel || provider) {
       rows.push({
-        id: 'hm-config-primary',
+        id: `hm-${safeId(profile.name)}-config-primary`,
         provider,
         model: defaultModel,
         status: defaultModel && provider ? 'config_present' : 'warn',
@@ -162,11 +223,12 @@ function collectModelHealth() {
         is_primary: true,
         is_fallback: false,
         last_checked_at: nowISO,
+        profile: profile.name,
       })
     }
 
     rows.push({
-      id: 'hm-config-fallback',
+      id: `hm-${safeId(profile.name)}-config-fallback`,
       provider: null,
       model: null,
       status: hasFallback ? 'config_present' : 'unconfigured',
@@ -174,12 +236,12 @@ function collectModelHealth() {
       is_primary: false,
       is_fallback: true,
       last_checked_at: nowISO,
+      profile: profile.name,
     })
 
-    return rows
-  } catch (err) {
-    return [{
-      id: 'hm-config-error',
+    } catch (err) {
+      rows.push({
+      id: `hm-${safeId(profile.name)}-config-error`,
       provider: null,
       model: null,
       status: 'bad',
@@ -187,9 +249,13 @@ function collectModelHealth() {
       is_primary: true,
       is_fallback: false,
       last_checked_at: nowISO,
-      error: `Unable to read sanitized Hermes model config: ${String(err?.message ?? err)}`,
-    }]
+      profile: profile.name,
+      error: `Unable to read sanitized Hermes model config for profile ${profile.name}: ${String(err?.message ?? err)}`,
+      })
+    }
   }
+
+  return rows
 }
 
 // ---- Source health checks ----
@@ -241,11 +307,13 @@ function collectSourceHealth() {
     synced_at: nowISO,
   })
 
-  // Sanitized Hermes cron/config sources
-  for (const source of [
-    { id: 'sh-hermes-cron-jobs', label: 'Hermes cron jobs metadata', path: HERMES_CRON_JOBS_FILE, type: 'filesystem' },
-    { id: 'sh-hermes-config', label: 'Hermes model/provider config metadata', path: HERMES_CONFIG_FILE, type: 'filesystem' },
-  ]) {
+  // Sanitized Hermes cron/config sources for every discovered profile.
+  const hermesSources = HERMES_PROFILES.flatMap(profile => [
+    { id: `sh-hermes-${safeId(profile.name)}-cron-jobs`, label: `Hermes cron jobs metadata (${profile.name})`, path: profile.cronFile, type: 'filesystem' },
+    { id: `sh-hermes-${safeId(profile.name)}-config`, label: `Hermes model/provider config metadata (${profile.name})`, path: profile.configFile, type: 'filesystem' },
+  ])
+
+  for (const source of hermesSources) {
     const exists = existsSync(source.path)
     let modifiedAt = null
     let ageHours = null
@@ -304,16 +372,24 @@ function collectSourceHealth() {
     synced_at: nowISO,
   })
 
+  const wikiExists = existsSync(OBSIDIAN_WIKI_JOURNAL_DIR)
+  let wikiModifiedAt = null
+  let wikiAgeHours = null
+  if (wikiExists) {
+    const stat = statSync(OBSIDIAN_WIKI_JOURNAL_DIR)
+    wikiModifiedAt = new Date(stat.mtimeMs).toISOString()
+    wikiAgeHours = parseFloat(((now.getTime() - stat.mtimeMs) / (1000 * 60 * 60)).toFixed(2))
+  }
   rows.push({
     id: 'sh-obsidian-wiki',
-    label: 'Obsidian vault (wiki ingestion)',
-    source_type: 'adapter',
-    exists: false,
-    readable: false,
-    modified_at: null,
-    age_hours: null,
-    status: 'bad',
-    error: 'Wiki ingestion adapter not connected — approved folders and scope not yet decided with Raz',
+    label: 'Obsidian journal folder (wiki ingestion)',
+    source_type: 'filesystem',
+    exists: wikiExists,
+    readable: wikiExists,
+    modified_at: wikiModifiedAt,
+    age_hours: wikiAgeHours,
+    status: wikiExists ? 'ok' : 'bad',
+    error: wikiExists ? null : 'Approved wiki source folder not found: 05_1%_Journal',
     synced_at: nowISO,
   })
 
@@ -347,15 +423,20 @@ function collectSourceHealth() {
 }
 
 // ---- Cron health ----
-// Reads sanitized Hermes cron metadata only. It deliberately excludes job prompts,
-// delivery targets, chat IDs, and script contents.
+// Reads sanitized Hermes cron metadata from every discovered Hermes profile. It deliberately
+// excludes job prompts, delivery targets, chat IDs, and script contents.
 function collectCronHealth() {
-  try {
-    const raw = readFileSync(HERMES_CRON_JOBS_FILE, 'utf8')
-    const parsed = JSON.parse(raw)
-    const jobs = Array.isArray(parsed.jobs) ? parsed.jobs : []
+  const rows = []
 
-    return jobs.map(job => {
+  for (const profile of HERMES_PROFILES) {
+    try {
+      if (!existsSync(profile.cronFile)) continue
+
+      const raw = readFileSync(profile.cronFile, 'utf8')
+      const parsed = JSON.parse(raw)
+      const jobs = Array.isArray(parsed.jobs) ? parsed.jobs : []
+
+      rows.push(...jobs.map(job => {
       const lastStatus = job.last_status ?? null
       const status = job.enabled === false
         ? 'warn'
@@ -364,8 +445,8 @@ function collectCronHealth() {
           : 'ok'
 
       return {
-        id: `cj-${job.id ?? 'unknown'}`,
-        agent: null,
+        id: `cj-${safeId(profile.name)}-${job.id ?? 'unknown'}`,
+        agent: profile.name,
         name: job.name ?? 'Unnamed Hermes cron job',
         schedule: job.schedule_display ?? job.schedule?.display ?? null,
         status,
@@ -378,12 +459,12 @@ function collectCronHealth() {
         error: job.last_error ? 'last_error_present_redacted' : null,
         synced_at: nowISO,
       }
-    })
-  } catch (err) {
-    return [{
-      id: 'cj-hermes-cron-read-error',
-      agent: null,
-      name: 'Hermes cron metadata',
+      }))
+    } catch (err) {
+      rows.push({
+      id: `cj-${safeId(profile.name)}-cron-read-error`,
+      agent: profile.name,
+      name: `Hermes cron metadata (${profile.name})`,
       schedule: null,
       status: 'bad',
       enabled: false,
@@ -392,10 +473,13 @@ function collectCronHealth() {
       last_run_at: null,
       next_run_at: null,
       duration_ms: null,
-      error: `Unable to read sanitized Hermes cron metadata: ${String(err?.message ?? err)}`,
+      error: `Unable to read sanitized Hermes cron metadata for profile ${profile.name}: ${String(err?.message ?? err)}`,
       synced_at: nowISO,
-    }]
+      })
+    }
   }
+
+  return rows
 }
 
 // ---- Obsidian status map ----
@@ -557,6 +641,82 @@ function collectObsidianProjects() {
   }
 }
 
+function readMarkdownFrontmatterAndBody(filePath) {
+  const raw = readFileSync(filePath, 'utf8')
+  if (!raw.startsWith('---\n')) return { frontmatter: null, body: raw }
+  const end = raw.indexOf('\n---', 4)
+  if (end === -1) return { frontmatter: null, body: raw }
+  const frontmatterText = raw.slice(0, end + 5)
+  const body = raw.slice(end + 5).replace(/^\s+/, '')
+  return { frontmatter: parseFrontmatter(frontmatterText), body }
+}
+
+function walkMarkdownFiles(dirPath) {
+  const files = []
+  function walk(current) {
+    let entries = []
+    try { entries = readdirSync(current, { withFileTypes: true }) } catch (_) { return }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue
+      const next = join(current, entry.name)
+      if (entry.isDirectory()) walk(next)
+      else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) files.push(next)
+    }
+  }
+  walk(dirPath)
+  return files.sort((a, b) => a.localeCompare(b))
+}
+
+// ---- Obsidian wiki adapter ----
+// Raz-approved scope: everything inside 05_1%_Journal. Paths are emitted relative to
+// that folder only; no absolute vault path is exposed in the snapshot.
+function collectWikiEntries() {
+  try {
+    if (!existsSync(OBSIDIAN_WIKI_JOURNAL_DIR)) {
+      return { ok: false, entries: [], error: 'Approved wiki source folder not found: 05_1%_Journal' }
+    }
+
+    const mdFiles = walkMarkdownFiles(OBSIDIAN_WIKI_JOURNAL_DIR)
+    const entries = []
+
+    for (const filePath of mdFiles) {
+      try {
+        const relPath = relative(OBSIDIAN_WIKI_JOURNAL_DIR, filePath)
+        const stat = statSync(filePath)
+        const { frontmatter, body } = readMarkdownFrontmatterAndBody(filePath)
+        const heading = body.match(/^#\s+(.+)$/m)?.[1]?.trim()
+        const fileTitle = relPath.split('/').pop()?.replace(/\.md$/i, '') ?? 'Untitled'
+        const title = frontmatter?.title ?? heading ?? fileTitle
+        const tagString = frontmatter?.tags ?? ''
+        const tags = tagString
+          .replace(/^\[|\]$/g, '')
+          .split(',')
+          .map(t => t.trim().replace(/^['\"]|['\"]$/g, ''))
+          .filter(Boolean)
+        const cleanBody = body.trim()
+
+        entries.push({
+          id: `wiki-${safeId(relPath.replace(/\.md$/i, ''))}`,
+          title,
+          source_type: 'journal',
+          author: frontmatter?.author ?? 'Raz / Warung Kerja',
+          project: frontmatter?.project ?? null,
+          tags,
+          excerpt: cleanBody.slice(0, 280),
+          body: cleanBody,
+          source_path: `05_1%_Journal/${relPath}`,
+          date: frontmatter?.date ?? frontmatter?.created ?? new Date(stat.mtimeMs).toISOString().slice(0, 10),
+          is_current: true,
+        })
+      } catch (_) {}
+    }
+
+    return { ok: true, entries }
+  } catch (err) {
+    return { ok: false, entries: [], error: String(err?.message ?? err) }
+  }
+}
+
 // ---- TickTick kanban cache reader ----
 // Reads the local cache file written by scripts/collect-ticktick.py.
 // Never reads credentials, API keys, or the Hermes .env file.
@@ -606,6 +766,7 @@ const modelHealth     = collectModelHealth()
 const sourceHealth    = collectSourceHealth()
 const cronJobs        = collectCronHealth()
 const obsidianResult  = collectObsidianProjects()
+const wikiResult      = collectWikiEntries()
 const ticktickResult  = collectTickTickKanban()
 const durationMs      = Date.now() - startMs
 
@@ -651,21 +812,23 @@ const adapterWarnings = {
   workspace: gitResult.ok
     ? `Git signals collected from warung-os repo (real local data). Branch: ${gitResult.signal.branch}, HEAD: ${gitResult.signal.head}.`
     : `Git signals collection failed: ${gitResult.error}`,
-  cron: `Hermes cron metadata read from active profile with prompts/delivery targets omitted. Jobs recorded: ${cronJobs.length}.`,
-  provider_health: 'Model/provider rows are sanitized config metadata only — no live API health or latency check performed.',
+  cron: `Hermes cron metadata read from all discovered profiles with prompts/delivery targets omitted. Profiles discovered: ${HERMES_PROFILES.length}. Jobs recorded: ${cronJobs.length}.`,
+  provider_health: `Model/provider rows are sanitized config metadata only — no live API health or latency check performed. Profiles discovered: ${HERMES_PROFILES.length}.`,
   token_usage: 'Agent/model/tool token usage adapter not connected — arrays are empty until Hermes log adapter is wired in.',
   agent_status: 'Team member status is static placeholder — live Hermes agent status adapter not yet connected.',
   obsidian_projects: obsidianResult.ok
     ? `Obsidian project frontmatter collected from 03_Active_Projects/. ${obsidianResult.projects.length} folder(s) found. Structured projects: ${obsidianResult.projects.filter(p => p.registry_status === 'registered').length}. Folder paths redacted. Body content not read.`
     : `Obsidian project adapter failed: ${obsidianResult.error}`,
-  wiki: 'Obsidian wiki ingestion adapter not connected — approved folders and scope not yet decided with Raz.',
+  wiki: wikiResult.ok
+    ? `Obsidian wiki entries collected from 05_1%_Journal/. ${wikiResult.entries.length} markdown file(s) ingested. Source paths are relative; absolute vault path omitted.`
+    : `Obsidian wiki adapter failed: ${wikiResult.error}`,
   ticktick: ticktickResult.ok
     ? `TickTick Warung OS board cache read (${ticktickResult.boards.length} board(s), ${ticktickResult.boards.reduce((n, b) => n + b.task_count, 0)} task(s)). Cache age: ${ticktickResult.cache_age_hours}h. Task descriptions and comments excluded.`
     : `TickTick adapter unavailable: ${ticktickResult.error}`,
 }
 
 const warnings = [
-  'Token usage (agent/model/tool), wiki entries, and dot delegation are unavailable — adapters not yet connected.',
+  'Token usage (agent/model/tool) and dot delegation are unavailable — adapters not yet connected.',
   'Model/provider health is config metadata only — no live API health or latency check was performed.',
   gitResult.ok
     ? `Workspace git signals are real local data from warung-os repo (branch: ${gitResult.signal.branch}).`
@@ -673,6 +836,9 @@ const warnings = [
   obsidianResult.ok
     ? `Obsidian project metadata collected from 03_Active_Projects/ (frontmatter only — body content not read). ${obsidianResult.projects.length} project(s) found.`
     : `Obsidian project adapter failed: ${obsidianResult.error}`,
+  wikiResult.ok
+    ? `Wiki entries collected from approved Obsidian folder 05_1%_Journal/ (${wikiResult.entries.length} markdown file(s)).`
+    : `Wiki adapter unavailable: ${wikiResult.error}`,
   ticktickResult.ok
     ? `TickTick Warung OS board: ${ticktickResult.boards.reduce((n, b) => n + b.task_count, 0)} undone task(s). Cache age: ${ticktickResult.cache_age_hours}h.`
     : `TickTick board adapter unavailable: ${ticktickResult.error}`,
@@ -684,11 +850,11 @@ const snapshot = {
     source_mode: 'snapshot',
     generated_at: nowISO,
     source_scope: 'hermes-only',
-    profile: 'tech-director',
+    profile: 'all-hermes-profiles',
     warnings,
     redactions_applied: false,
     // is_demo: false — this snapshot reads real local data (git signals, filesystem).
-    // Token usage, wiki, and delegation are genuinely unavailable, not fabricated.
+    // Token usage and delegation are genuinely unavailable, not fabricated.
     is_demo: false,
     adapter_warnings: adapterWarnings,
   },
@@ -699,7 +865,7 @@ const snapshot = {
         id: 'db-snap-1',
         type: 'info',
         title: 'Snapshot generated',
-        body: `Snapshot generated at ${nowISO}. Git signals, Hermes cron metadata, Obsidian project metadata, and TickTick board cache are real local data. Token usage, wiki, and dot delegation remain unavailable until adapters are connected.`,
+        body: `Snapshot generated at ${nowISO}. Git signals, all-profile Hermes cron/model metadata, Obsidian project metadata, approved journal wiki entries, and TickTick board cache are real local data. Token usage and dot delegation remain unavailable until adapters are connected.`,
         time: now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }),
         project: 'warung-os',
       },
@@ -730,8 +896,8 @@ const snapshot = {
       {
         id: 'db-snap-2',
         type: 'next',
-        title: 'Phase 2 complete — next: decide Wiki scope with Raz',
-        body: 'Phase 2 adapters QA passed. Remaining open decisions: Wiki ingestion folders, snapshot commit policy, Phase 3 scope.',
+        title: 'Phase 2 scope updated — next: hosted mirror architecture',
+        body: 'Wiki scope is approved as 05_1%_Journal, and Operations now scans all Hermes profiles. Remaining open decision: auth-gated hosted mirror path similar to Mission Control Online.',
         time: 'Phase 2',
         project: 'warung-os',
       },
@@ -819,7 +985,7 @@ const snapshot = {
           provider_health: modelHealth.some(model => model.status === 'bad') ? 'failed' : 'config_only',
           token_adapter: 'unavailable',
           obsidian_projects_adapter: obsidianResult.ok ? `ok (${obsidianResult.projects.length} projects)` : `failed: ${obsidianResult.error}`,
-          obsidian_wiki_adapter: 'unavailable',
+          obsidian_wiki_adapter: wikiResult.ok ? `ok (${wikiResult.entries.length} entries)` : `failed: ${wikiResult.error}`,
           ticktick_board_adapter: ticktickResult.ok
             ? `ok (cache ${ticktickResult.cache_age_hours}h old, ${ticktickResult.boards.reduce((n, b) => n + b.task_count, 0)} tasks)`
             : `unavailable: ${ticktickResult.error}`,
@@ -839,8 +1005,7 @@ const snapshot = {
   },
 
   wiki: {
-    // Requires Obsidian adapter — unavailable.
-    entries: [],
+    entries: wikiResult.entries,
   },
 }
 
@@ -850,10 +1015,12 @@ writeFileSync(OUT_FILE, JSON.stringify(snapshot, null, 2), 'utf8')
 console.log(`\n[warung-os] Snapshot written → ${OUT_FILE}`)
 console.log(`[warung-os] source_mode: ${snapshot.meta.source_mode} · scope: ${snapshot.meta.source_scope} · is_demo: ${snapshot.meta.is_demo} · profile: ${snapshot.meta.profile}`)
 console.log(`[warung-os] Git signals:    ${gitResult.ok ? `ok  (branch: ${gitResult.signal.branch}, head: ${gitResult.signal.head}, commits_24h: ${gitResult.signal.commits_24h})` : `FAILED: ${gitResult.error}`}`)
-console.log(`[warung-os] Cron jobs:      ${cronJobs.length} Hermes profile job(s) recorded (prompts/delivery targets omitted)`)
-console.log(`[warung-os] Model health:   ${modelHealth.length} config row(s) listed (no live health check)`)
+console.log(`[warung-os] Hermes profiles: ${HERMES_PROFILES.map(p => p.name).join(', ')}`)
+console.log(`[warung-os] Cron jobs:      ${cronJobs.length} Hermes job(s) recorded across discovered profiles (prompts/delivery targets omitted)`)
+console.log(`[warung-os] Model health:   ${modelHealth.length} config row(s) listed across discovered profiles (no live health check)`)
 console.log(`[warung-os] Source health:  ${sourceHealth.filter(s => s.status === 'ok').length} ok / ${sourceHealth.length} total`)
 console.log(`[warung-os] Obsidian projects: ${obsidianResult.ok ? `ok  (${obsidianResult.projects.length} folder(s), ${obsidianResult.projects.filter(p => p.registry_status === 'registered').length} with frontmatter)` : `FAILED: ${obsidianResult.error}`}`)
+console.log(`[warung-os] Wiki entries:   ${wikiResult.ok ? `ok  (${wikiResult.entries.length} markdown file(s) from 05_1%_Journal)` : `FAILED: ${wikiResult.error}`}`)
 console.log(`[warung-os] Projects in snapshot: ${projectItems.length}`)
 console.log(`[warung-os] TickTick board: ${ticktickResult.ok ? `ok  (${ticktickResult.boards.reduce((n, b) => n + b.task_count, 0)} task(s), cache ${ticktickResult.cache_age_hours}h old)` : `UNAVAIL: ${ticktickResult.error}`}`)
 console.log(`[warung-os] Duration:       ${durationMs}ms`)

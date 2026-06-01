@@ -48,10 +48,10 @@ The first build is a local MVP shell based on the approved static wireframe. It 
 
 ### Could later
 
-- Add real TickTick MCP ingestion.
-- Add Obsidian file parsing for project/wiki sources.
-- Add Hermes cron/session/provider data collectors.
-- Add hosted snapshot mirror with auth.
+- Extend TickTick ingestion beyond the current cached Warung OS board adapter.
+- Extend Obsidian parsing beyond the current approved project/wiki source folders if Raz approves more folders.
+- Add remaining Hermes session/token/delegation data collectors across all Hermes profiles.
+- Add hosted snapshot mirror with auth so Warung OS can be accessed from Raz's other computers.
 - Add Telegram approval buttons.
 
 ### Won't in first build
@@ -92,7 +92,7 @@ Acceptance criteria:
 
 Raz requirement: the Operations page can use a different UI solution, but it must let him read the same type of data and report as Mission Control Online.
 
-Data scope requirement: Operations must show Raz's Hermes agents/environment only. Token usage, cron/automation health, model/provider/fallback health, source health, sync runs, workspace/git signals, and agent/team status must not include OpenClaw agents or OpenClaw telemetry.
+Data scope requirement: Operations must show Raz's Hermes environment only, across all Hermes profiles present now and added in the future. Token usage, cron/automation health, model/provider/fallback health, source health, sync runs, workspace/git signals, and agent/team status must not include OpenClaw agents or OpenClaw telemetry.
 
 The first build must include fixture-backed sections for:
 
@@ -125,8 +125,10 @@ Mission Control Online reference type names to preserve/adapt:
 Acceptance criteria:
 
 - Shows list of wiki/journal entries.
+- Approved ingestion scope is everything within `/Users/gabi/Documents/Warung Kerja 1.0/05_1%_Journal/`.
 - Supports basic keyword search/filter locally over fixture data.
 - Shows source path/link placeholder and metadata: date, author/agent, project/tags.
+- Snapshot output must use relative source paths only, e.g. `05_1%_Journal/<note>.md`, not absolute vault paths.
 - AI/RAG assistant stays marked as Phase 2.
 
 ### FR6 — Safety and audit posture
@@ -140,7 +142,8 @@ Acceptance criteria:
 
 ## Non-functional requirements
 
-- Runs locally on macOS.
+- Runs locally on macOS first.
+- Future hosted access must support Raz using Warung OS from other computers through an auth-gated hosted snapshot mirror similar to Mission Control Online; browsers must not get arbitrary local command execution.
 - Prefer TypeScript for data contracts.
 - Keep first implementation simple and maintainable.
 - Build should pass `npm run build` or equivalent.
@@ -169,12 +172,14 @@ src/
 
 Keep adapters out of first pass unless cheap. Use fixture data shaped like future adapters.
 
+## Hosted access direction
+
+Warung OS should eventually be accessible from Raz's other computers, similar to Mission Control Online. The target pattern is an auth-gated hosted read mirror fed by curated snapshots/sync bridge data, not direct local filesystem access and not arbitrary browser-triggered command execution.
+
 ## Open questions parked for later
 
-- Which Hermes profiles should Operations include first: `tech-director` only, or all Warung Kerja Hermes profiles on this Mac?
 - Snapshot storage: commit safe demo snapshots, or keep generated snapshots local-only/gitignored?
-- Exact Wiki ingestion scope: which Obsidian folders are approved for diary/journal browsing?
 - TickTick privacy: exclude comments by default, or include selected comments in snapshots?
-- Hosted mirror: local-only vs online auth-gated snapshot mirror.
+- Exact hosted mirror stack/path and auth implementation.
 - Exact approval write path.
 - Gabs final visual direction pass.

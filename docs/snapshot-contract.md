@@ -38,7 +38,7 @@ The snapshot contract is typed in `src/types/snapshot.ts`.
 | `source_mode` | `"fixture" \| "snapshot"` | yes | Shown as DATA SOURCE label in Operations |
 | `generated_at` | ISO 8601 string | yes | When the generator ran |
 | `source_scope` | `"hermes-only" \| "fixture"` | yes | `"hermes-only"` when real Hermes data |
-| `profile` | string \| null | yes | Hermes profile name, or null for fixture |
+| `profile` | string \| null | yes | `all-hermes-profiles` for real snapshots, a single profile name for legacy snapshots, or null for fixture |
 | `warnings` | string[] | yes | Human-readable warnings shown in Operations |
 | `redactions_applied` | boolean | yes | True if any values were redacted |
 | `is_demo` | boolean | yes | True for fixture-backed / demo snapshots |
@@ -48,8 +48,7 @@ The snapshot contract is typed in `src/types/snapshot.ts`.
 
 ## operations
 
-**Critical constraint:** `source_scope` in `operations` MUST be `"hermes-only"`. Do not include
-OpenClaw agents, OpenClaw token usage, OpenClaw cron jobs, or OpenClaw telemetry.
+**Critical constraint:** `source_scope` in `operations` MUST be `"hermes-only"`. Real snapshots must include all discovered Hermes profiles under `/Users/gabi/.hermes/profiles/` plus the root/default Hermes profile when metadata exists, so newly added profiles are picked up automatically. Do not include OpenClaw agents, OpenClaw token usage, OpenClaw cron jobs, or OpenClaw telemetry.
 
 Fields that may be empty when the adapter is not connected:
 
@@ -108,8 +107,8 @@ is older than the threshold.
 |---------|--------|-------------|
 | `workspace_signal` | **Real** | `git log`, `git status --porcelain` on warung-os repo |
 | `source_health` | **Real** | `fs.stat` on snapshot, Hermes cron/config files, Obsidian projects dir, TickTick cache file + `git status` |
-| `cron_jobs` | **Real (sanitized)** | Active Hermes profile `cron/jobs.json`; prompts, delivery targets, and chat IDs omitted |
-| `hermes_model_health` | **Partial** | Active Hermes profile `config.yaml` model/provider metadata; no live API/latency check |
+| `cron_jobs` | **Real (sanitized)** | All discovered Hermes profile `cron/jobs.json` files; prompts, delivery targets, and chat IDs omitted |
+| `hermes_model_health` | **Partial** | All discovered Hermes profile `config.yaml` model/provider metadata; no live API/latency check |
 | `projects.items` | **Real (frontmatter only)** | `03_Active_Projects/` folder scan; YAML frontmatter parsed; folder paths redacted; body not read |
 | `projects.kanban_boards` | **Real when cache populated** | `scripts/collect-ticktick.py` writes cache to Hermes profile; generator reads it. Task titles, columns, priorities only — no descriptions or comments. Run `npm run ticktick:collect` first. |
 | `agent_token_daily` | Unavailable | Hermes log adapter not yet connected |
@@ -117,7 +116,19 @@ is older than the threshold.
 | `tool_usage_daily` | Unavailable | Hermes log adapter not yet connected |
 | `dot_delegation` | Unavailable | Live Hermes delegation tracker not yet connected |
 | `team_members` (projects) | Static placeholder | Live Hermes agent status adapter not yet connected |
-| `wiki.entries` | Unavailable | Scope/folders not yet approved by Raz |
+| `wiki.entries` | **Real** | All markdown files inside approved folder `05_1%_Journal/`; source paths are relative, not absolute vault paths |
+
+### wiki.entries adapter detail
+
+- Approved source folder: `/Users/gabi/Documents/Warung Kerja 1.0/05_1%_Journal/`.
+- Includes markdown files in that folder and nested subfolders.
+- Extracts title from frontmatter `title`, first `# heading`, or filename.
+- Emits `source_path` relative to the approved folder, e.g. `05_1%_Journal/<note>.md`.
+- Does not expose the absolute Obsidian vault path.
+
+### Hosted mirror direction
+
+Warung OS is expected to become accessible from Raz's other computers, similar to Mission Control Online. The approved direction is an auth-gated hosted snapshot mirror fed by curated local snapshots/sync bridge data. Browser actions must remain requests/approvals, not arbitrary remote command execution.
 
 ### projects.kanban_boards adapter detail
 
