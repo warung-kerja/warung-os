@@ -11,6 +11,7 @@
     "hosted:prepare": "node scripts/prepare-hosted-snapshot.mjs",
     "hosted:publish": "node scripts/publish-snapshot.mjs",
     "hosted:publish:dry-run": "node scripts/publish-snapshot.mjs --dry-run",
+    "hosted:preflight": "node scripts/hosted-preflight.mjs",
     "snapshot:prepare-hosted": "npm run snapshot:generate && npm run hosted:prepare",
     "ticktick:collect": "HERMES_HOME=/Users/gabi/.hermes/profiles/tech-director HOME=/Users/gabi /Users/gabi/.hermes/hermes-agent/venv/bin/python scripts/collect-ticktick.py"
   },

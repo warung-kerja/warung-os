@@ -37,6 +37,18 @@ Reads from each Hermes profile:
 Status reflects config metadata only — no live API health check or latency measurement is performed.
 Never reads: API keys, OAuth tokens, credentials, session transcripts, delivery targets.
 
+### hermes-tool-usage.mjs
+
+**Export:** `collectToolUsage(profiles, nowISO) → { daily: ToolUsageDaily[], profileCount, rowCount }`
+
+Reads from each Hermes profile's `state.db`:
+- `messages` table: `tool_name`, `timestamp`, `token_count` — tool name, when it was called, token cost
+- `sessions` table (JOIN): `model`, `source` — to group by model and execution context (cron/cli/telegram)
+
+Groups by `(day, tool_name)` across all profiles. `input_tokens`, `output_tokens`, `cache_*_tokens` are always `0` — the messages table stores a single `token_count` per message, not split by direction.
+
+Never reads: `content`, `tool_calls` (arguments), `reasoning`, `system_prompt`, `title`, or any credential/transcript field.
+
 ---
 
 ## Safety rules for all adapters
@@ -67,6 +79,6 @@ Never reads: API keys, OAuth tokens, credentials, session transcripts, delivery 
 | `hermes-cron.mjs` | `cron/jobs.json`, `cron/output/` filenames | Connected — real data |
 | `hermes-provider-health.mjs` | `config.yaml`, `gateway_state.json`, `provider_models_cache.json` | Connected — config metadata only, no live API |
 | token usage | `state.db` sessions table | Embedded in generator — real data |
-| tool usage | `state.db` messages table | Deferred — messages adapter not yet written |
+| `hermes-tool-usage.mjs` | `state.db` messages table | Connected — tool_name + token_count, last 7 days; no input/output/cache split |
 | dot delegation | Hermes delegation tracker | Unavailable — live source not yet defined |
 | agent status | Hermes agent status | Placeholder only — live source not yet defined |

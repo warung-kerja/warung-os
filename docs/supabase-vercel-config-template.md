@@ -3,6 +3,29 @@
 **Status:** Template only. No real credentials in this file.
 **Scope:** Phase 5 hosted mirror, private snapshot storage, auth-gated frontend later.
 
+## Env variable boundary — what goes where
+
+The secret boundary is the critical safety rule. Never cross it.
+
+| Variable | Where it lives | Browser/Vercel safe? | Notes |
+|---|---|---|---|
+| `VITE_WARUNG_SNAPSHOT_MODE` | `.env` / Vercel env | Yes | `local`, `prepared`, or `remote` |
+| `VITE_WARUNG_REMOTE_SNAPSHOT_URL` | `.env` / Vercel env | Yes | Remote snapshot URL for hosted mode |
+| `VITE_WARUNG_REMOTE_AUTH_MODE` | `.env` / Vercel env | Yes | `supabase-auth` in P5.5 hosted deployment |
+| `VITE_WARUNG_SNAPSHOT_MAX_AGE_MINUTES` | `.env` / Vercel env | Yes | Stale threshold |
+| `VITE_SUPABASE_URL` | `.env` / Vercel env | **Yes** | Public project URL — anon access only |
+| `VITE_SUPABASE_ANON_KEY` | `.env` / Vercel env | **Yes** | Public anon key — no special access |
+| `SUPABASE_URL` | `.env.publish` (local only) | **NO** | Publisher upload target — never in Vercel |
+| `SUPABASE_SERVICE_ROLE_KEY` | `.env.publish` (local only) | **NO** | Upload credential — bypasses RLS, Mac-only |
+| `SUPABASE_STORAGE_BUCKET` | `.env.publish` (local only) | No | Bucket name for publisher |
+| `SUPABASE_STORAGE_OBJECT` | `.env.publish` (local only) | No | Object path for publisher |
+
+**Rule:** `SUPABASE_SERVICE_ROLE_KEY` must never appear in a `VITE_` variable, a Vercel env var, a committed file, or the browser bundle. If it ever does, treat it as a credential leak.
+
+Run `npm run hosted:preflight` to validate the boundary is intact locally.
+
+---
+
 ## Local files
 
 - `.env.example` — frontend/public runtime config template.
