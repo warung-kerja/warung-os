@@ -42,6 +42,8 @@ import { writeFileSync, readFileSync, readdirSync, mkdirSync, existsSync, statSy
 import { execSync } from 'child_process'
 import { join, dirname, relative } from 'path'
 import { fileURLToPath } from 'url'
+import { collectCronJobs } from './adapters/hermes-cron.mjs'
+import { collectProviderHealth } from './adapters/hermes-provider-health.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
@@ -186,80 +188,8 @@ function collectGitSignals(repoPath) {
   }
 }
 
-// ---- Hermes model/provider config ----
-// Reads only non-secret model/provider names from every discovered Hermes profile config.
-// No live API health check — latency and availability are not measured here.
-function collectModelHealth() {
-  const rows = []
-
-  for (const profile of HERMES_PROFILES) {
-    try {
-      if (!existsSync(profile.configFile)) {
-        rows.push({
-          id: `hm-${safeId(profile.name)}-config-missing`,
-          provider: null,
-          model: null,
-          status: 'unconfigured',
-          latency_ms: null,
-          is_primary: true,
-          is_fallback: false,
-          last_checked_at: nowISO,
-          profile: profile.name,
-        })
-        continue
-      }
-
-    const config = readFileSync(profile.configFile, 'utf8')
-    const modelBlock = config.match(/^model:\n((?:\s+.*\n?)*)/m)?.[1] ?? ''
-    const defaultModel = modelBlock.match(/^\s+default:\s*['"]?([^'"\n#]+)['"]?/m)?.[1]?.trim() || null
-    const provider = modelBlock.match(/^\s+provider:\s*['"]?([^'"\n#]+)['"]?/m)?.[1]?.trim() || null
-    const fallbackLine = config.match(/^fallback_providers:\s*(.*)$/m)?.[1]?.trim() ?? '[]'
-    const hasFallback = fallbackLine !== '[]' && fallbackLine !== ''
-
-    if (defaultModel || provider) {
-      rows.push({
-        id: `hm-${safeId(profile.name)}-config-primary`,
-        provider,
-        model: defaultModel,
-        status: defaultModel && provider ? 'config_present' : 'warn',
-        latency_ms: null,
-        is_primary: true,
-        is_fallback: false,
-        last_checked_at: nowISO,
-        profile: profile.name,
-      })
-    }
-
-    rows.push({
-      id: `hm-${safeId(profile.name)}-config-fallback`,
-      provider: null,
-      model: null,
-      status: hasFallback ? 'config_present' : 'unconfigured',
-      latency_ms: null,
-      is_primary: false,
-      is_fallback: true,
-      last_checked_at: nowISO,
-      profile: profile.name,
-    })
-
-    } catch (err) {
-      rows.push({
-      id: `hm-${safeId(profile.name)}-config-error`,
-      provider: null,
-      model: null,
-      status: 'bad',
-      latency_ms: null,
-      is_primary: true,
-      is_fallback: false,
-      last_checked_at: nowISO,
-      profile: profile.name,
-      error: `Unable to read sanitized Hermes model config for profile ${profile.name}: ${String(err?.message ?? err)}`,
-      })
-    }
-  }
-
-  return rows
-}
+// collectModelHealth, collectGatewayStatus, collectProviderCatalog extracted to
+// scripts/adapters/hermes-provider-health.mjs — imported above as collectProviderHealth.
 
 // ---- Source health checks ----
 // Checks known local sources; sets status 'bad' for disconnected adapters.
@@ -572,203 +502,8 @@ function collectSessionTokenUsage() {
   return { ok: true, modelDaily, agentDaily, rawRowCount: totalRows, profileCount }
 }
 
-// ---- Cron health ----
-// Reads sanitized Hermes cron metadata from every discovered Hermes profile. It deliberately
-// excludes job prompts, delivery targets, chat IDs, and script contents.
-function collectCronHealth() {
-  const rows = []
-
-  for (const profile of HERMES_PROFILES) {
-    try {
-      if (!existsSync(profile.cronFile)) continue
-
-      const raw = readFileSync(profile.cronFile, 'utf8')
-      const parsed = JSON.parse(raw)
-      const jobs = Array.isArray(parsed.jobs) ? parsed.jobs : []
-
-      rows.push(...jobs.map(job => {
-      const lastStatus = job.last_status ?? null
-      const status = job.enabled === false
-        ? 'warn'
-        : lastStatus === 'error' || job.last_error
-          ? 'bad'
-          : 'ok'
-
-      return {
-        id: `cj-${safeId(profile.name)}-${job.id ?? 'unknown'}`,
-        agent: profile.name,
-        name: job.name ?? 'Unnamed Hermes cron job',
-        schedule: job.schedule_display ?? job.schedule?.display ?? null,
-        status,
-        enabled: Boolean(job.enabled),
-        model: job.model ?? null,
-        model_source: job.provider ?? null,
-        last_run_at: job.last_run_at ?? null,
-        next_run_at: job.next_run_at ?? null,
-        duration_ms: null,
-        error: job.last_error ? 'last_error_present_redacted' : null,
-        // repeat.completed = total successful runs recorded in jobs.json (safe integer)
-        completed_runs: typeof job.repeat?.completed === 'number' ? job.repeat.completed : null,
-        // skills = list of Hermes skill names assigned to the job (safe non-secret strings)
-        skills: Array.isArray(job.skills) && job.skills.length > 0
-          ? job.skills
-          : (job.skill ? [job.skill] : []),
-        synced_at: nowISO,
-      }
-      }))
-    } catch (err) {
-      rows.push({
-      id: `cj-${safeId(profile.name)}-cron-read-error`,
-      agent: profile.name,
-      name: `Hermes cron metadata (${profile.name})`,
-      schedule: null,
-      status: 'bad',
-      enabled: false,
-      model: null,
-      model_source: null,
-      last_run_at: null,
-      next_run_at: null,
-      duration_ms: null,
-      error: `Unable to read sanitized Hermes cron metadata for profile ${profile.name}: ${String(err?.message ?? err)}`,
-      synced_at: nowISO,
-      })
-    }
-  }
-
-  return rows
-}
-
-// ---- Hermes gateway status ----
-// Reads gateway_state.json from every discovered Hermes profile directory.
-// Extracts: gateway state, active agents count, platform names + connectivity states.
-// Does NOT read session transcripts, API keys, cron prompts, or credentials.
-function collectGatewayStatus() {
-  const rows = []
-
-  for (const profile of HERMES_PROFILES) {
-    const stateFile = join(profile.dir, 'gateway_state.json')
-    try {
-      if (!existsSync(stateFile)) continue
-
-      const raw = readFileSync(stateFile, 'utf8')
-      const state = JSON.parse(raw)
-
-      const platforms = Object.entries(state.platforms ?? {}).map(([name, info]) => ({
-        name,
-        state: info?.state ?? 'unknown',
-        error_message: info?.error_message ?? null,
-        updated_at: info?.updated_at ?? null,
-      }))
-
-      rows.push({
-        id: `gw-${safeId(profile.name)}`,
-        profile: profile.name,
-        gateway_state: state.gateway_state ?? 'unknown',
-        active_agents: typeof state.active_agents === 'number' ? state.active_agents : 0,
-        platforms,
-        updated_at: state.updated_at ?? null,
-        synced_at: nowISO,
-      })
-    } catch (err) {
-      rows.push({
-        id: `gw-${safeId(profile.name)}-error`,
-        profile: profile.name,
-        gateway_state: 'unknown',
-        active_agents: 0,
-        platforms: [],
-        updated_at: null,
-        synced_at: nowISO,
-        error: `Failed to read gateway_state.json for profile ${profile.name}: ${String(err?.message ?? err)}`,
-      })
-    }
-  }
-
-  return rows
-}
-
-// ---- Cron run history ----
-// Reads cron output directory filenames (NOT file contents) to derive actual run history.
-// Filename format: YYYY-MM-DD_HH-MM-SS.md — no secret data, no prompt content.
-// Returns a map keyed by "profileName/jobId" → { run_count, recent_run_timestamps }.
-function collectCronRunHistory() {
-  const history = {}
-
-  for (const profile of HERMES_PROFILES) {
-    const cronOutputDir = join(profile.dir, 'cron', 'output')
-    if (!existsSync(cronOutputDir)) continue
-
-    try {
-      const jobDirs = readdirSync(cronOutputDir, { withFileTypes: true })
-        .filter(e => e.isDirectory())
-
-      for (const jobDir of jobDirs) {
-        const jobId = jobDir.name
-        const jobOutputPath = join(cronOutputDir, jobId)
-
-        try {
-          const files = readdirSync(jobOutputPath)
-            .filter(f => f.endsWith('.md'))
-            .sort()
-
-          const runTimestamps = files.map(f => {
-            // Parse YYYY-MM-DD_HH-MM-SS.md
-            const m = f.match(/^(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})\.md$/)
-            if (!m) return null
-            try {
-              return new Date(`${m[1]}T${m[2]}:${m[3]}:${m[4]}`).toISOString()
-            } catch { return null }
-          }).filter(Boolean)
-
-          const key = `${safeId(profile.name)}/${jobId}`
-          history[key] = {
-            job_id: jobId,
-            profile: profile.name,
-            run_count: files.length,
-            recent_run_timestamps: runTimestamps.slice(-5),
-          }
-        } catch (_) {}
-      }
-    } catch (_) {}
-  }
-
-  return history
-}
-
-// ---- Provider models catalog ----
-// Reads provider_models_cache.json from every discovered Hermes profile directory.
-// Extracts provider names, model counts, and cache age — no credentials, no keys.
-function collectProviderCatalog() {
-  const rows = []
-
-  for (const profile of HERMES_PROFILES) {
-    const catalogFile = join(profile.dir, 'provider_models_cache.json')
-    try {
-      if (!existsSync(catalogFile)) continue
-
-      const raw = readFileSync(catalogFile, 'utf8')
-      const cache = JSON.parse(raw)
-
-      for (const [providerName, info] of Object.entries(cache)) {
-        const models = Array.isArray(info?.models) ? info.models : []
-        // 'at' is a Unix epoch float timestamp
-        const cachedAt = typeof info?.at === 'number'
-          ? new Date(info.at * 1000).toISOString()
-          : null
-
-        rows.push({
-          id: `pc-${safeId(profile.name)}-${safeId(providerName)}`,
-          profile: profile.name,
-          provider: providerName,
-          model_count: models.length,
-          cached_at: cachedAt,
-          synced_at: nowISO,
-        })
-      }
-    } catch (_) {}
-  }
-
-  return rows
-}
+// collectCronHealth, collectCronRunHistory, enrichment extracted to
+// scripts/adapters/hermes-cron.mjs — imported above as collectCronJobs.
 
 // ---- Obsidian status map ----
 // Maps Obsidian frontmatter status values to CanonicalProject status strings.
@@ -1050,33 +785,14 @@ function collectTickTickKanban() {
 
 // ---- Run all collectors ----
 const gitResult       = collectGitSignals(ROOT)
-const modelHealth     = collectModelHealth()
-const cronRunHistory  = collectCronRunHistory()
-const cronJobsRaw     = collectCronHealth()
-const gatewayStatus   = collectGatewayStatus()
-const providerCatalog = collectProviderCatalog()
+const { modelHealth, gatewayStatus, providerCatalog } = collectProviderHealth(HERMES_PROFILES, nowISO)
+const cronJobs        = collectCronJobs(HERMES_PROFILES, nowISO)
 const sourceHealth    = collectSourceHealth()
 const obsidianResult  = collectObsidianProjects()
 const wikiResult      = collectWikiEntries()
 const ticktickResult  = collectTickTickKanban()
 const tokenResult     = collectSessionTokenUsage()
 const durationMs      = Date.now() - startMs
-
-// Enrich cron jobs with run history from output directory (filenames only — no content read)
-const cronJobs = cronJobsRaw.map(job => {
-  // Match by profile+jobId key — job.id format is "cj-<profile>-<jobId>"
-  // Extract raw jobId from job.id: "cj-<profile>-<rawJobId>"
-  const profileSafe = safeId(job.agent ?? '')
-  const rawJobId = job.id.replace(new RegExp(`^cj-${profileSafe}-`), '')
-  const historyKey = `${profileSafe}/${rawJobId}`
-  const hist = cronRunHistory[historyKey]
-  if (!hist) return job
-  return {
-    ...job,
-    run_count: hist.run_count,
-    recent_run_timestamps: hist.recent_run_timestamps,
-  }
-})
 
 // Enrich the warung-os project entry with git-derived timing (real local data).
 const enrichedProjects = obsidianResult.projects.map(p => {
