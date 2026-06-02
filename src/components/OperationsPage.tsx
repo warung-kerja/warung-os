@@ -106,8 +106,18 @@ function HBarRow({ label, value, max, colorClass }: { label: string; value: numb
   )
 }
 
-const DATES_7D = ['05-25','05-26','05-27','05-28','05-29','05-30','05-31']
-const FULL_DATES_7D = ['2026-05-25','2026-05-26','2026-05-27','2026-05-28','2026-05-29','2026-05-30','2026-05-31']
+// Derive last 7 calendar days ending on a given ISO date string (or today).
+function buildLast7Days(anchorISO?: string | null): { short: string; full: string }[] {
+  const anchor = anchorISO ? new Date(anchorISO) : new Date()
+  const result: { short: string; full: string }[] = []
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(anchor)
+    d.setDate(d.getDate() - i)
+    const full = d.toISOString().slice(0, 10)
+    result.push({ short: full.slice(5), full })
+  }
+  return result
+}
 
 function UnavailableNote({ label }: { label: string }) {
   return (
@@ -251,61 +261,73 @@ function OverviewTab({ data }: { data: WarungData }) {
   )
 }
 
+const SOURCE_COLORS: Record<string, string> = { cron: '', telegram: 'blue', cli: 'teal', acp: 'ok' }
+
 function UsageTab({ data }: { data: WarungData }) {
   const { agentTokenDaily, modelTokenDaily, toolUsageDaily } = data
 
-  const agents = ['baro', 'mia', 'gabs', 'obey']
-  const agentColors: Record<string, string> = { baro: '', mia: 'blue', gabs: 'teal', obey: 'ok' }
-
-  const agentDailyTotals = FULL_DATES_7D.map(d =>
-    agentTokenDaily.filter(r => r.date === d).reduce((s, r) => s + r.total_tokens, 0)
-  )
-  const agentMaxTotal = Math.max(...agentDailyTotals, 1)
-
-  const latestDate = agentTokenDaily.reduce((max, r) => r.date > max ? r.date : max, FULL_DATES_7D[FULL_DATES_7D.length - 1])
-  const todayAgentRows = agents.map(a => ({
-    agent: a,
-    total: agentTokenDaily.find(r => r.agent === a && r.date === latestDate)?.total_tokens ?? 0,
-    turns: agentTokenDaily.find(r => r.agent === a && r.date === latestDate)?.turns ?? 0,
-  }))
-  const agentMax = Math.max(...todayAgentRows.map(r => r.total), 1)
-
-  const models = ['claude-sonnet-4-6', 'claude-opus-4-7', 'claude-haiku-4-5']
-  const modelColors: Record<string, string> = { 'claude-sonnet-4-6': '', 'claude-opus-4-7': 'blue', 'claude-haiku-4-5': 'teal' }
-
-  const modelDailyTotals = FULL_DATES_7D.map(d =>
-    modelTokenDaily.filter(r => r.date === d).reduce((s, r) => s + r.total_tokens, 0)
-  )
-  const modelMaxTotal = Math.max(...modelDailyTotals, 1)
-
-  const todayModelRows = models.map(m => ({
-    model: m,
-    total: modelTokenDaily.find(r => r.model === m && r.date === latestDate)?.total_tokens ?? 0,
-    turns: modelTokenDaily.find(r => r.model === m && r.date === latestDate)?.turns ?? 0,
-  }))
-  const modelMax = Math.max(...todayModelRows.map(r => r.total), 1)
-
   const hasAgentData = agentTokenDaily.length > 0
   const hasModelData = modelTokenDaily.length > 0
-  const hasToolData = toolUsageDaily.length > 0
+  const hasToolData  = toolUsageDaily.length > 0
+
+  // Derive 7-day window from data or fall back to today
+  const allDates = [...new Set([...agentTokenDaily, ...modelTokenDaily].map(r => r.date))].sort()
+  const latestDate = allDates[allDates.length - 1] ?? new Date().toISOString().slice(0, 10)
+  const days7 = buildLast7Days(latestDate + 'T12:00:00Z')
+
+  // Source/agent chart
+  const uniqueSources = [...new Set(agentTokenDaily.map(r => r.agent))].sort()
+  const agentDailyTotals = days7.map(d =>
+    agentTokenDaily.filter(r => r.date === d.full).reduce((s, r) => s + r.total_tokens, 0)
+  )
+  const agentMaxTotal = Math.max(...agentDailyTotals, 1)
+  const todayAgentRows = uniqueSources.map(s => ({
+    agent: s,
+    total: agentTokenDaily.filter(r => r.agent === s && r.date === latestDate).reduce((sum, r) => sum + r.total_tokens, 0),
+    turns: agentTokenDaily.filter(r => r.agent === s && r.date === latestDate).reduce((sum, r) => sum + r.turns, 0),
+  })).filter(r => r.total > 0 || uniqueSources.length <= 4)
+  const agentMax = Math.max(...todayAgentRows.map(r => r.total), 1)
+
+  // Model chart
+  const uniqueModels = [...new Set(modelTokenDaily.map(r => r.model))].sort()
+  const modelDailyTotals = days7.map(d =>
+    modelTokenDaily.filter(r => r.date === d.full).reduce((s, r) => s + r.total_tokens, 0)
+  )
+  const modelMaxTotal = Math.max(...modelDailyTotals, 1)
+  const todayModelRows = uniqueModels.map(m => ({
+    model: m,
+    total: modelTokenDaily.filter(r => r.model === m && r.date === latestDate).reduce((sum, r) => sum + r.total_tokens, 0),
+    turns: modelTokenDaily.filter(r => r.model === m && r.date === latestDate).reduce((sum, r) => sum + r.turns, 0),
+  }))
+  const modelMax = Math.max(...todayModelRows.map(r => r.total), 1)
+  const modelColors = ['', 'blue', 'teal', 'ok', '']
+
   const toolMax = Math.max(...toolUsageDaily.map(t => t.calls), 1)
 
   return (
     <>
       <div className="ops-section">
-        <div className="ops-section-label">Agent token usage daily</div>
+        <div className="ops-section-label">Token usage by source · Hermes state.db</div>
         {!hasAgentData
-          ? <div className="panel"><UnavailableNote label="agent token usage" /><p style={{ fontSize: 11, color: 'var(--muted)' }}>Token usage adapter not yet connected. Data will appear here when a Hermes-side collector is wired in.</p></div>
+          ? <div className="panel"><UnavailableNote label="source token usage" /><p style={{ fontSize: 11, color: 'var(--muted)' }}>Token usage adapter not yet connected. Data will appear here when state.db is readable.</p></div>
           : <div className="grid grid--2">
               <div className="panel">
-                <div className="mono" style={{ marginBottom: 10 }}>7-day total trend</div>
-                <VertBarChart values={agentDailyTotals} labels={DATES_7D} maxValue={agentMaxTotal} />
+                <div className="mono" style={{ marginBottom: 10 }}>7-day total trend (all sources)</div>
+                <VertBarChart values={agentDailyTotals} labels={days7.map(d => d.short)} maxValue={agentMaxTotal} />
               </div>
               <div className="panel panel--alt">
-                <div className="mono" style={{ marginBottom: 10 }}>Today by agent</div>
+                <div className="mono" style={{ marginBottom: 10 }}>Today · {latestDate} — by source</div>
                 {todayAgentRows.map(row => (
-                  <HBarRow key={row.agent} label={row.agent} value={row.total} max={agentMax} colorClass={agentColors[row.agent]} />
+                  <HBarRow key={row.agent} label={row.agent} value={row.total} max={agentMax} colorClass={SOURCE_COLORS[row.agent] ?? ''} />
                 ))}
+                <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+                  {todayAgentRows.map(row => (
+                    <div key={row.agent} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '3px 0' }}>
+                      <span style={{ color: 'var(--soft)' }}>{row.agent}</span>
+                      <span className="mono" style={{ fontSize: 10 }}>{row.turns} sessions</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
         }
@@ -314,31 +336,31 @@ function UsageTab({ data }: { data: WarungData }) {
       <div className="gap-sm" />
 
       <div className="ops-section">
-        <div className="ops-section-label">Model token burn daily</div>
+        <div className="ops-section-label">Model token burn daily · Hermes state.db</div>
         {!hasModelData
           ? <div className="panel"><UnavailableNote label="model token burn" /></div>
           : <div className="grid grid--2">
               <div className="panel">
-                <div className="mono" style={{ marginBottom: 10 }}>7-day total trend</div>
-                <VertBarChart values={modelDailyTotals} labels={DATES_7D} maxValue={modelMaxTotal} colorClass="blue" />
+                <div className="mono" style={{ marginBottom: 10 }}>7-day total trend (all models)</div>
+                <VertBarChart values={modelDailyTotals} labels={days7.map(d => d.short)} maxValue={modelMaxTotal} colorClass="blue" />
               </div>
               <div className="panel panel--alt">
-                <div className="mono" style={{ marginBottom: 10 }}>Today by model</div>
+                <div className="mono" style={{ marginBottom: 10 }}>Today · {latestDate} — by model</div>
                 {todayModelRows.map((row, i) => (
                   <HBarRow
                     key={row.model}
-                    label={row.model.replace('claude-','').replace('-4-6','').replace('-4-7','').replace('-4-5','')}
+                    label={row.model.length > 22 ? row.model.slice(0, 22) + '…' : row.model}
                     value={row.total}
                     max={modelMax}
-                    colorClass={Object.values(modelColors)[i]}
+                    colorClass={modelColors[i % modelColors.length]}
                   />
                 ))}
                 <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
-                  <div className="mono" style={{ marginBottom: 6 }}>Today turns by model</div>
+                  <div className="mono" style={{ marginBottom: 6 }}>Today sessions by model</div>
                   {todayModelRows.map(row => (
-                    <div key={row.model} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '4px 0' }}>
-                      <span style={{ color: 'var(--soft)' }}>{row.model.replace('claude-', '')}</span>
-                      <span className="mono" style={{ fontSize: 10 }}>{row.turns} turns</span>
+                    <div key={row.model} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '3px 0' }}>
+                      <span style={{ color: 'var(--soft)', fontFamily: 'var(--mono)', fontSize: 10 }}>{row.model}</span>
+                      <span className="mono" style={{ fontSize: 10 }}>{row.turns} sessions</span>
                     </div>
                   ))}
                 </div>
@@ -352,7 +374,7 @@ function UsageTab({ data }: { data: WarungData }) {
       <div className="ops-section">
         <div className="ops-section-label">Tool usage daily · {latestDate}</div>
         {!hasToolData
-          ? <div className="panel"><UnavailableNote label="tool usage" /></div>
+          ? <div className="panel"><UnavailableNote label="tool usage" /><p style={{ fontSize: 11, color: 'var(--muted)' }}>Tool usage adapter deferred — requires messages table parsing.</p></div>
           : <div className="table-wrap">
               <table className="data-table" style={{ width: '100%' }}>
                 <thead>
@@ -439,16 +461,16 @@ function AutomationTab({ data }: { data: WarungData }) {
                       <th>Agent</th>
                       <th>Schedule</th>
                       <th>Status</th>
-                      <th>Runs</th>
+                      <th>Runs (7d)</th>
+                      <th>Total</th>
                       <th>Last run</th>
                       <th>Next run</th>
-                      <th>Duration</th>
+                      <th>Skills</th>
                       <th>Error</th>
                     </tr>
                   </thead>
                   <tbody>
                     {cronJobs.map(cj => {
-                      // last timestamp from filesystem output filenames (may differ from jobs.json last_run_at)
                       const fsLastRun = cj.recent_run_timestamps?.[cj.recent_run_timestamps.length - 1] ?? null
                       return (
                       <tr key={cj.id}>
@@ -471,6 +493,9 @@ function AutomationTab({ data }: { data: WarungData }) {
                         >
                           {cj.run_count != null ? cj.run_count : '—'}
                         </td>
+                        <td className="cell-mono" title="Total successful runs (jobs.json repeat.completed)">
+                          {cj.completed_runs != null ? cj.completed_runs : '—'}
+                        </td>
                         <td className="cell-mono">
                           {cj.last_run_at
                             ? fmtTime(cj.last_run_at)
@@ -479,8 +504,10 @@ function AutomationTab({ data }: { data: WarungData }) {
                               : '—'}
                         </td>
                         <td className="cell-mono">{cj.next_run_at ? fmtTime(cj.next_run_at) : '—'}</td>
-                        <td className="cell-mono">{cj.duration_ms != null ? `${(cj.duration_ms / 1000).toFixed(1)}s` : '—'}</td>
-                        <td className="cell-muted" style={{ fontSize: 10, maxWidth: 200 }}>{cj.error ?? '—'}</td>
+                        <td className="cell-muted" style={{ fontSize: 10, maxWidth: 160 }}>
+                          {cj.skills && cj.skills.length > 0 ? cj.skills.join(', ') : '—'}
+                        </td>
+                        <td className="cell-muted" style={{ fontSize: 10, maxWidth: 180 }}>{cj.error ?? '—'}</td>
                       </tr>
                     )})}
                   </tbody>

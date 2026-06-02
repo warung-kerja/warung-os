@@ -20,16 +20,19 @@
  * REAL data collected by this generator:
  *   workspace_signal    — warung-os git log (branch, HEAD, commits, file churn, working tree)
  *   source_health       — filesystem checks (snapshot file, git repo, cron/config, Obsidian projects dir, TickTick cache)
- *   cron_jobs           — sanitized Hermes profile cron job metadata from cron/jobs.json
+ *   cron_jobs           — sanitized Hermes profile cron job metadata from cron/jobs.json; includes completed_runs + skills
  *   hermes_model_health — sanitized Hermes profile model config from config.yaml
  *   projects.items      — Obsidian 03_Active_Projects/ folder scan; YAML frontmatter only; folder paths redacted
  *   projects.kanban_boards — TickTick 'Warung OS' board cache (task titles, columns, priorities; no descriptions/comments)
+ *   model_token_daily   — aggregate token totals from Hermes state.db (sessions table, SUM of integer columns only;
+ *                         no message content, no system_prompt, no title read; grouped by day+model)
+ *   agent_token_daily   — aggregate token totals by execution source (cron/telegram/cli) from Hermes state.db
  *
  * PLACEHOLDER / UNAVAILABLE:
- *   agent_token_daily, model_token_daily, tool_usage_daily — requires Hermes log adapter
- *   dot_delegation  — requires live Hermes delegation tracker
- *   wiki.entries    — requires Obsidian adapter
- *   team_members    — static; requires live Hermes agent status adapter
+ *   tool_usage_daily — requires messages table adapter (deferred)
+ *   dot_delegation   — requires live Hermes delegation tracker
+ *   wiki.entries     — requires Obsidian adapter
+ *   team_members     — static; requires live Hermes agent status adapter
  *
  * TickTick note: run `npm run ticktick:collect` first to populate the cache.
  * The generator reads the cache file; it never handles TickTick credentials directly.
@@ -461,6 +464,114 @@ function collectSourceHealth() {
   return rows
 }
 
+// ---- Session token usage ----
+// Reads aggregate token totals from Hermes state.db (one per profile).
+// SAFETY: queries only numeric SUM fields and non-secret string columns (model, source) from
+// the sessions table. No system_prompt, title, content, reasoning, or message content is read.
+// source values are safe platform identifiers: cli, cron, telegram, acp.
+// Uses sqlite3 -readonly to avoid WAL conflicts with a running Hermes process.
+function collectSessionTokenUsage() {
+  const allRows = []
+
+  const SQLITE3 = '/usr/bin/sqlite3'
+  if (!existsSync(SQLITE3)) return { ok: false, error: 'sqlite3 CLI not found', modelDaily: [], agentDaily: [] }
+
+  const QUERY = [
+    "SELECT",
+    "  date(started_at, 'unixepoch', 'localtime') as day,",
+    "  model,",
+    "  COALESCE(source, 'unknown') as source,",
+    "  SUM(input_tokens) as input_tokens,",
+    "  SUM(output_tokens) as output_tokens,",
+    "  SUM(cache_read_tokens) as cache_read_tokens,",
+    "  SUM(cache_write_tokens) as cache_write_tokens,",
+    "  COUNT(*) as sessions,",
+    "  SUM(tool_call_count) as tool_calls",
+    "FROM sessions",
+    "WHERE model IS NOT NULL",
+    "  AND started_at >= unixepoch('now', '-7 days')",
+    "GROUP BY day, model, source",
+    "ORDER BY day DESC, input_tokens DESC",
+  ].join(' ')
+
+  for (const profile of HERMES_PROFILES) {
+    const dbPath = join(profile.dir, 'state.db')
+    if (!existsSync(dbPath)) continue
+    try {
+      const raw = execSync(`"${SQLITE3}" -readonly -json "${dbPath}"`, {
+        input: QUERY,
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 8000,
+      })
+      const rows = JSON.parse(raw || '[]')
+      for (const row of rows) allRows.push({ ...row, profile: profile.name })
+    } catch (_) {
+      // Fail silently per profile — locked DB or missing sqlite3 should not break the snapshot.
+    }
+  }
+
+  // Aggregate to ModelTokenUsageDaily (by date + model, across all profiles)
+  const modelMap = {}
+  for (const row of allRows) {
+    const key = `${row.day}-${safeId(row.model)}`
+    if (!modelMap[key]) {
+      modelMap[key] = {
+        id: `mtd-${safeId(row.day)}-${safeId(row.model)}`,
+        model: row.model,
+        date: row.day,
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
+        total_tokens: 0,
+        turns: 0,
+        synced_at: nowISO,
+      }
+    }
+    modelMap[key].input_tokens    += (row.input_tokens    ?? 0)
+    modelMap[key].output_tokens   += (row.output_tokens   ?? 0)
+    modelMap[key].cache_read_tokens  += (row.cache_read_tokens  ?? 0)
+    modelMap[key].cache_write_tokens += (row.cache_write_tokens ?? 0)
+    modelMap[key].total_tokens += (row.input_tokens ?? 0) + (row.output_tokens ?? 0)
+    modelMap[key].turns += (row.sessions ?? 0)
+  }
+
+  // Aggregate to AgentTokenUsageDaily (by date + source/context, across all profiles)
+  const agentMap = {}
+  for (const row of allRows) {
+    const key = `${row.day}-${safeId(row.source)}`
+    if (!agentMap[key]) {
+      agentMap[key] = {
+        id: `atd-${safeId(row.day)}-${safeId(row.source)}`,
+        agent: row.source,   // execution context: cron, telegram, cli, acp
+        parent_agent: null,
+        date: row.day,
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
+        total_tokens: 0,
+        turns: 0,
+        synced_at: nowISO,
+      }
+    }
+    agentMap[key].input_tokens    += (row.input_tokens    ?? 0)
+    agentMap[key].output_tokens   += (row.output_tokens   ?? 0)
+    agentMap[key].cache_read_tokens  += (row.cache_read_tokens  ?? 0)
+    agentMap[key].cache_write_tokens += (row.cache_write_tokens ?? 0)
+    agentMap[key].total_tokens += (row.input_tokens ?? 0) + (row.output_tokens ?? 0)
+    agentMap[key].turns += (row.sessions ?? 0)
+  }
+
+  const modelDaily = Object.values(modelMap).sort((a, b) => b.date.localeCompare(a.date) || b.total_tokens - a.total_tokens)
+  const agentDaily = Object.values(agentMap).sort((a, b) => b.date.localeCompare(a.date) || b.total_tokens - a.total_tokens)
+  const totalRows = allRows.length
+  const profileCount = new Set(allRows.map(r => r.profile)).size
+
+  return { ok: true, modelDaily, agentDaily, rawRowCount: totalRows, profileCount }
+}
+
 // ---- Cron health ----
 // Reads sanitized Hermes cron metadata from every discovered Hermes profile. It deliberately
 // excludes job prompts, delivery targets, chat IDs, and script contents.
@@ -496,6 +607,12 @@ function collectCronHealth() {
         next_run_at: job.next_run_at ?? null,
         duration_ms: null,
         error: job.last_error ? 'last_error_present_redacted' : null,
+        // repeat.completed = total successful runs recorded in jobs.json (safe integer)
+        completed_runs: typeof job.repeat?.completed === 'number' ? job.repeat.completed : null,
+        // skills = list of Hermes skill names assigned to the job (safe non-secret strings)
+        skills: Array.isArray(job.skills) && job.skills.length > 0
+          ? job.skills
+          : (job.skill ? [job.skill] : []),
         synced_at: nowISO,
       }
       }))
@@ -942,6 +1059,7 @@ const sourceHealth    = collectSourceHealth()
 const obsidianResult  = collectObsidianProjects()
 const wikiResult      = collectWikiEntries()
 const ticktickResult  = collectTickTickKanban()
+const tokenResult     = collectSessionTokenUsage()
 const durationMs      = Date.now() - startMs
 
 // Enrich cron jobs with run history from output directory (filenames only — no content read)
@@ -1005,7 +1123,7 @@ const adapterWarnings = {
   workspace: gitResult.ok
     ? `Git signals collected from warung-os repo (real local data). Branch: ${gitResult.signal.branch}, HEAD: ${gitResult.signal.head}.`
     : `Git signals collection failed: ${gitResult.error}`,
-  cron: `Hermes cron metadata read from all discovered profiles with prompts/delivery targets omitted. Profiles discovered: ${HERMES_PROFILES.length}. Jobs recorded: ${cronJobs.length}. Run history enriched from output directory filenames (no content read).`,
+  cron: `Hermes cron metadata read from all discovered profiles with prompts/delivery targets omitted. Profiles discovered: ${HERMES_PROFILES.length}. Jobs recorded: ${cronJobs.length}. completed_runs and skills fields included. Run history enriched from output directory filenames (no content read).`,
   provider_health: `Model/provider rows are sanitized config metadata only — no live API health or latency check performed. Profiles discovered: ${HERMES_PROFILES.length}.`,
   gateway_status: gatewayStatus.length > 0
     ? `Hermes gateway state read from gateway_state.json for ${gatewayStatus.length} profile(s). Running: ${gatewayRunning}. Platforms: ${gatewayPlatformsSummary || 'none'}.`
@@ -1013,7 +1131,9 @@ const adapterWarnings = {
   provider_catalog: providerCatalog.length > 0
     ? `Provider models catalog read from provider_models_cache.json for ${new Set(providerCatalog.map(p => p.profile)).size} profile(s). ${new Set(providerCatalog.map(p => p.provider)).size} provider(s). Total models: ${providerCatalog.reduce((n, p) => n + p.model_count, 0)}.`
     : 'Provider models cache not found in any profile.',
-  token_usage: 'Agent/model/tool token usage adapter not connected — arrays are empty until Hermes log adapter is wired in.',
+  token_usage: tokenResult.ok
+    ? `Session token usage adapter connected. ${tokenResult.profileCount} Hermes profile(s). ${tokenResult.rawRowCount} (day, model, source) aggregate rows. model_token_daily: ${tokenResult.modelDaily.length} rows. agent_token_daily: ${tokenResult.agentDaily.length} rows. tool_usage_daily: unavailable (messages adapter deferred).`
+    : `Session token usage adapter unavailable: ${tokenResult.error}. Arrays remain empty.`,
   agent_status: 'Team member status is static placeholder — live Hermes agent status adapter not yet connected.',
   obsidian_projects: obsidianResult.ok
     ? `Obsidian project frontmatter collected from 03_Active_Projects/. ${obsidianResult.projects.length} folder(s) found. Structured projects: ${obsidianResult.projects.filter(p => p.registry_status === 'registered').length}. Folder paths redacted. Body content not read.`
@@ -1027,7 +1147,9 @@ const adapterWarnings = {
 }
 
 const warnings = [
-  'Token usage (agent/model/tool) and dot delegation are unavailable — adapters not yet connected.',
+  tokenResult.ok
+    ? `Session token usage connected (state.db): ${tokenResult.profileCount} profile(s), ${tokenResult.modelDaily.length} model-day row(s), ${tokenResult.agentDaily.length} source-day row(s). tool_usage_daily unavailable (deferred). dot_delegation unavailable.`
+    : `Token usage unavailable: ${tokenResult.error}. dot_delegation unavailable.`,
   'Model/provider health is config metadata only — no live API health or latency check was performed.',
   gitResult.ok
     ? `Workspace git signals are real local data from warung-os repo (branch: ${gitResult.signal.branch}).`
@@ -1167,9 +1289,10 @@ const snapshot = {
     // MUST remain 'hermes-only' — never include OpenClaw agents or telemetry.
     source_scope: 'hermes-only',
 
-    // Unavailable — requires Hermes log adapter. Do not fabricate numbers.
-    agent_token_daily: [],
-    model_token_daily: [],
+    // Session token usage — read from Hermes state.db (SUM of integer fields only; no content).
+    // agent = execution source context (cron, telegram, cli). tool_usage_daily deferred.
+    agent_token_daily: tokenResult.ok ? tokenResult.agentDaily : [],
+    model_token_daily: tokenResult.ok ? tokenResult.modelDaily : [],
     tool_usage_daily: [],
 
     cron_jobs: cronJobs,
@@ -1190,7 +1313,9 @@ const snapshot = {
           provider_health: modelHealth.some(model => model.status === 'bad') ? 'failed' : 'config_only',
           gateway_status: gatewayStatus.length > 0 ? `ok (${gatewayRunning}/${gatewayStatus.length} running, platforms: ${gatewayPlatformsSummary || 'none'})` : 'unavailable',
           provider_catalog: providerCatalog.length > 0 ? `ok (${new Set(providerCatalog.map(p => p.provider)).size} providers, ${providerCatalog.reduce((n, p) => n + p.model_count, 0)} models)` : 'unavailable',
-          token_adapter: 'unavailable',
+          token_adapter: tokenResult.ok
+            ? `ok (${tokenResult.profileCount} profiles, ${tokenResult.modelDaily.length} model-day rows, ${tokenResult.agentDaily.length} source-day rows)`
+            : `unavailable: ${tokenResult.error}`,
           obsidian_projects_adapter: obsidianResult.ok ? `ok (${obsidianResult.projects.length} projects)` : `failed: ${obsidianResult.error}`,
           obsidian_wiki_adapter: wikiResult.ok ? `ok (${wikiResult.entries.length} entries)` : `failed: ${wikiResult.error}`,
           ticktick_board_adapter: ticktickResult.ok
@@ -1234,6 +1359,7 @@ console.log(`[warung-os] Obsidian projects: ${obsidianResult.ok ? `ok  (${obsidi
 console.log(`[warung-os] Wiki entries:   ${wikiResult.ok ? `ok  (${wikiResult.entries.length} markdown file(s) from 05_1%_Journal)` : `FAILED: ${wikiResult.error}`}`)
 console.log(`[warung-os] Projects in snapshot: ${projectItems.length}`)
 console.log(`[warung-os] TickTick board: ${ticktickResult.ok ? `ok  (${ticktickResult.boards.reduce((n, b) => n + b.task_count, 0)} task(s), cache ${ticktickResult.cache_age_hours}h old)` : `UNAVAIL: ${ticktickResult.error}`}`)
+console.log(`[warung-os] Token usage:    ${tokenResult.ok ? `ok  (${tokenResult.profileCount} profile(s), ${tokenResult.modelDaily.length} model-day, ${tokenResult.agentDaily.length} source-day rows)` : `UNAVAIL: ${tokenResult.error}`}`)
 console.log(`[warung-os] Duration:       ${durationMs}ms`)
 console.log(`[warung-os] Warnings:`)
 warnings.forEach(w => console.log(`  - ${w}`))

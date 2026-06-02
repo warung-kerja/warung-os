@@ -94,6 +94,10 @@ export interface CronJobSnapshot {
   // Phase 3: enriched from cron output directory (filenames only — no content read)
   run_count?: number | null
   recent_run_timestamps?: string[] | null
+  // Phase 5: total successful runs from jobs.json repeat.completed (safe integer)
+  completed_runs?: number | null
+  // Phase 5: Hermes skill names assigned to this job (non-secret strings)
+  skills?: string[] | null
 }
 
 export interface AgentTokenUsageDaily {
