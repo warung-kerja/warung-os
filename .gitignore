@@ -11,3 +11,6 @@ dist/
 # Generated local snapshots — local-only, never commit
 # Commit public/snapshots/demo.json only if explicitly marked is_demo: true
 public/snapshots/latest.json
+
+# Phase 5 local hosted-mirror export package — sanitized but real/private, never commit
+hosted-export/

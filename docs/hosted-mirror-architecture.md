@@ -1,9 +1,9 @@
 # Warung OS — Auth-Gated Hosted Mirror Architecture
 
-**Status:** Draft / Phase 3 planning  
-**Owner:** Mia (tech lead), Raz (approval required before any deployment)  
-**Date:** 2026-06-01  
-**Implements:** CLAUDE.md § Remote access direction; Epic Phase 5 — Hosted mirror  
+**Status:** Phase 5 active — safe local preparation started
+**Owner:** Mia (tech lead), Raz (approval required before any deployment)
+**Date:** 2026-06-01; reopened 2026-06-02
+**Implements:** CLAUDE.md § Remote access direction; Epic Phase 5 — Hosted mirror
 
 ---
 
@@ -233,16 +233,17 @@ Freshness display logic (hosted only):
 
 ---
 
-## Implementation sequence (Phase 5, requires Raz approval)
+## Implementation sequence (Phase 5)
 
-1. Raz confirms Supabase project and bucket name to use.
-2. Mia creates Storage bucket and RLS policy (no new account needed if MCO project is reused or a new project in existing account).
-3. Mia writes `scripts/publish-snapshot.mjs` with extra sanitization pass.
-4. Mia adds Supabase client and auth wall to the React app.
-5. Mia deploys to Vercel with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` set.
-6. Mia writes local publisher bridge with `sync_requests` poll loop.
-7. Raz smoke-tests from a second browser/device.
-8. QA: verify RLS blocks unauthenticated access, stale label shows correctly, browser actions only write to `sync_requests`.
+1. Safe local prep: write `scripts/prepare-hosted-snapshot.mjs` to validate and package a hosted export without uploading anything.
+2. Raz confirms Supabase project and bucket name to use.
+3. Mia creates Storage bucket and RLS policy (no new account needed if MCO project is reused or a new project in existing account).
+4. Mia writes `scripts/publish-snapshot.mjs` with extra sanitization pass and explicit fail-closed credential handling.
+5. Mia adds Supabase client and auth wall to the React app.
+6. Mia deploys to Vercel with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` set.
+7. Mia writes local publisher bridge with `sync_requests` poll loop.
+8. Raz smoke-tests from a second browser/device.
+9. QA: verify RLS blocks unauthenticated access, stale label shows correctly, browser actions only write to `sync_requests`.
 
 ---
 

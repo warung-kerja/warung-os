@@ -8,6 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "snapshot:generate": "node scripts/generate-snapshot.mjs",
+    "hosted:prepare": "node scripts/prepare-hosted-snapshot.mjs",
+    "snapshot:prepare-hosted": "npm run snapshot:generate && npm run hosted:prepare",
     "ticktick:collect": "HERMES_HOME=/Users/gabi/.hermes/profiles/tech-director HOME=/Users/gabi /Users/gabi/.hermes/hermes-agent/venv/bin/python scripts/collect-ticktick.py"
   },
   "dependencies": {

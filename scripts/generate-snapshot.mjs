@@ -1101,9 +1101,9 @@ const snapshot = {
       {
         id: 'db-snap-2',
         type: 'next',
-        title: 'Phase 3 — hosted mirror architecture drafted',
-        body: 'Auth-gated hosted mirror architecture doc written (docs/hosted-mirror-architecture.md). Gateway and provider catalog adapters now documented. Open decisions: Supabase project choice, publish frequency, and snapshot versioning — requires Raz approval before Phase 5 implementation.',
-        time: 'Phase 3',
+        title: 'Phase 5 — hosted mirror prep started',
+        body: 'Raz approved reopening Phase 5. Current safe slice prepares a local hosted-mirror export package only — no upload, deployment, or remote command execution.',
+        time: 'Phase 5',
         project: 'warung-os',
       },
     ],

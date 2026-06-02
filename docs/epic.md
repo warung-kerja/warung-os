@@ -71,13 +71,16 @@ Deliverables:
 - Audit log UX.
 - No direct external publishing or messaging without Raz approval.
 
-## Phase 5 — Hosted mirror, if approved
+## Phase 5 — Hosted mirror
+
+Status: Active — safe local preparation slice started 2026-06-02. Plan: `docs/phase-5-hosted-mirror-plan.md`.
 
 Deliverables:
 
 - Secure hosted snapshot mirror, likely Mission Control Online-style Supabase/Vercel pattern.
 - Auth and RLS.
 - Local bridge only writes curated snapshots.
+- Local hosted export package with safety manifest before any upload/deployment.
 
 ## Risks / constraints
 

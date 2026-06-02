@@ -41,6 +41,16 @@ export interface SnapshotMeta {
   redactions_applied: boolean
   is_demo: boolean
   adapter_warnings: Record<string, string>
+  // Phase 5 hosted-mirror metadata. The local generator may omit these;
+  // prepare-hosted-snapshot adds them to the local export package.
+  max_age_minutes?: number
+  published_at?: string
+  hosted_export?: {
+    prepared_at: string
+    mode: 'local-export-only' | 'uploaded'
+    storage_strategy: 'supabase-storage' | 'supabase-db'
+    upload_performed: boolean
+  }
 }
 
 export interface OperationsSnapshot {

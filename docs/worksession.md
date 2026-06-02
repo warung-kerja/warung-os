@@ -8,9 +8,11 @@ Warung OS
 
 ## Current priority
 
-Phase 4 — approvals and audit trail.
+Phase 5 — hosted mirror, safe local preparation.
 
-Next slice: harden local-only action request UX by wiring remaining safe placeholders (for example run-log/open-detail buttons) into request-state records and audit entries. Keep all actions as local session placeholders only; no external publishing, messaging, deployment, or remote command execution.
+Next slice: Raz reopened Phase 5 on 2026-06-02. Start with local hosted-readiness only: prepare and validate a gitignored hosted export package from the existing snapshot. Do not upload, deploy, create paid services, change secrets, or configure external accounts until Raz confirms hosting/auth details.
+
+**Phase 5.1 local export prep completed (2026-06-02):** added `scripts/prepare-hosted-snapshot.mjs`, `npm run hosted:prepare`, and `npm run snapshot:prepare-hosted`. The script validates the generated snapshot for Hermes-only scope, absolute local paths, secret-like values, and sensitive keys, then writes gitignored `hosted-export/latest.json` and `hosted-export/manifest.json` with `upload_performed: false`, `max_age_minutes: 60`, and local-export-only metadata. QA passed: `npm run snapshot:prepare-hosted` and `npm run build`. No upload, deployment, external account configuration, paid service, or credential changes were performed.
 
 **Phase 4 slice completed (2026-06-02):** wired remaining dead placeholder buttons into LocalState audit trail. "Open run log" (Operations header) now creates a `view_run_log` audit entry and navigates to the Automation tab. "View source notes" (Home header) creates a `view_source_notes` entry. "Approve focus" (Home header) approves the first pending approval item or records `focus_approved`. "Mark structure approved" (Home) approves the matching project approval or records `focus_approved`. Active Projects approval buttons now update session-only approval overrides; "Sync Obsidian" and "New review queue" create local audit entries only. Added `view_run_log`, `view_source_notes`, `focus_approved`, `sync_obsidian_requested`, and `review_queue_requested` to `AuditAction` type. Surfaced Hermes cron run history in AutomationTab: added `Runs` column showing `run_count` (from filesystem output filenames) and uses `recent_run_timestamps` as a fallback for last-run time when `last_run_at` is absent. Build, snapshot generation, and browser smoke pass. Snapshot generator unchanged and still collecting real Hermes data.
 

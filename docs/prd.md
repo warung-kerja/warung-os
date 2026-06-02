@@ -46,12 +46,12 @@ The first build is a local MVP shell based on the approved static wireframe. It 
 - Document commands and limitations in README.
 - Include a basic QA/build command.
 
-### Could later
+### Could later / Phase 5
 
 - Extend TickTick ingestion beyond the current cached Warung OS board adapter.
 - Extend Obsidian parsing beyond the current approved project/wiki source folders if Raz approves more folders.
 - Add remaining Hermes session/token/delegation data collectors across all Hermes profiles.
-- Add hosted snapshot mirror with auth so Warung OS can be accessed from Raz's other computers.
+- Add hosted snapshot mirror with auth so Warung OS can be accessed from Raz's other computers. Raz reopened Phase 5 on 2026-06-02; first slice is local export preparation only, with no upload/deployment until hosting details are confirmed.
 - Add Telegram approval buttons.
 
 ### Won't in first build
@@ -180,6 +180,6 @@ Warung OS should eventually be accessible from Raz's other computers, similar to
 
 - Snapshot storage: commit safe demo snapshots, or keep generated snapshots local-only/gitignored?
 - TickTick privacy: exclude comments by default, or include selected comments in snapshots?
-- Exact hosted mirror stack/path and auth implementation.
+- Exact live hosted mirror stack/path and auth implementation after local export prep.
 - Exact approval write path.
 - Gabs final visual direction pass.
