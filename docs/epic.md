@@ -73,7 +73,14 @@ Deliverables:
 
 ## Phase 5 — Hosted mirror
 
-Status: Active — safe local preparation slice started 2026-06-02. Plan: `docs/phase-5-hosted-mirror-plan.md`.
+Status: Active — P5.1-P5.4 fail-closed hosted readiness completed 2026-06-02 after Raz approved continuing Phase 5. Plan: `docs/phase-5-hosted-mirror-plan.md`.
+
+Completed readiness slices:
+
+- P5.1 local hosted export package with safety manifest.
+- P5.2 frontend data-source boundary for local/prepared/remote snapshots plus unavailable/auth/stale states.
+- P5.3 Supabase/Vercel config templates with no real credentials.
+- P5.4 local publisher bridge that defaults to dry-run and requires `.env.publish` + `--upload` for any real upload.
 
 Deliverables:
 

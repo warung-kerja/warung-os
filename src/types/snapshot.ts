@@ -27,6 +27,8 @@ import type {
 
 export type SourceMode = 'fixture' | 'snapshot'
 export type FreshnessState = 'fresh' | 'stale' | 'unavailable'
+export type RuntimeSnapshotSourceMode = 'fixture' | 'local' | 'prepared' | 'remote'
+export type RuntimeSnapshotStatus = FreshnessState | 'auth_required' | 'error'
 
 // ---- JSON snapshot contract (shape of latest.json) ----
 
@@ -94,6 +96,9 @@ export interface DataSourceMeta {
   sourceMode: SourceMode
   generatedAt: string | null
   freshness: FreshnessState
+  runtimeSource: RuntimeSnapshotSourceMode
+  runtimeStatus: RuntimeSnapshotStatus
+  snapshotUrl: string | null
   profile: string | null
   warnings: string[]
   adapterWarnings: Record<string, string>

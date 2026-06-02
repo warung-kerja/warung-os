@@ -8,11 +8,13 @@ Warung OS
 
 ## Current priority
 
-Phase 5 — hosted mirror, safe local preparation.
+Phase 5 — hosted mirror, approved fail-closed readiness.
 
-Next slice: paused for Raz decision before any hosted upload/deployment/account/credential work. Decide hosting/auth details (or keep Warung OS local-only). Safe local prep now includes hosted export validation plus read-only Hermes session token usage from `state.db`.
+Next slice: P5.5 auth-gated hosted app target. Raz approved continuing Phase 5, and P5.1-P5.4 are implemented as local/fail-closed readiness. Actual upload still requires Raz/local credentials in `.env.publish` and the explicit `npm run hosted:publish -- --upload` command; no deployment/account billing changes should be made silently.
 
-**Phase 5.2 token usage adapter completed (2026-06-02):** added a read-only Hermes `state.db` session token usage adapter to `scripts/generate-snapshot.mjs` and surfaced the data in Operations → Usage. The adapter queries only aggregate numeric token/session fields grouped by day/model/source; it does not read message content, titles, prompts, reasoning, memories, transcripts, secrets, token stores, or OAuth data. Cron rows now also show safe `completed_runs` and assigned skill names. QA passed: `npm run snapshot:prepare-hosted`, `npm run build`, and browser smoke on Operations Usage/Automation with browser console clean. No upload, deployment, external account configuration, paid service, or credential changes were performed.
+**Phase 5.4 publisher bridge completed (2026-06-02):** added `scripts/publish-snapshot.mjs`, `.env.publish.example`, `.env.example`, and `docs/supabase-vercel-config-template.md`. The publisher validates `hosted-export/latest.json` against `manifest.json`, checks Hermes-only scope, and defaults to dry-run. Real upload is fail-closed behind `.env.publish` + `--upload`; service-role keys stay local only and never enter Vite/Vercel/browser config. QA passed: `npm run snapshot:prepare-hosted`, `npm run hosted:publish:dry-run`, and `npm run build`. Dry-run target showed `SUPABASE_URL_UNSET/storage/v1/object/warung-os-snapshots/latest.json`; no upload was performed.
+
+**Phase 5.2 hosted data-source boundary completed (2026-06-02):** updated the React snapshot loader so Warung OS can distinguish `local`, `prepared`, and `remote` snapshot modes with explicit `fresh`, `stale`, `unavailable`, `auth_required`, and `error` states. Local dev still defaults to `/snapshots/latest.json`; remote Supabase auth mode deliberately returns `auth_required` until P5.5 implements the auth wall.
 
 **Phase 5.1 local export prep completed (2026-06-02):** added `scripts/prepare-hosted-snapshot.mjs`, `npm run hosted:prepare`, and `npm run snapshot:prepare-hosted`. The script validates the generated snapshot for Hermes-only scope, absolute local paths, secret-like values, and sensitive keys, then writes gitignored `hosted-export/latest.json` and `hosted-export/manifest.json` with `upload_performed: false`, `max_age_minutes: 60`, and local-export-only metadata. QA passed: `npm run snapshot:prepare-hosted` and `npm run build`. No upload, deployment, external account configuration, paid service, or credential changes were performed.
 
@@ -59,6 +61,8 @@ Run these before sign-off when relevant:
 
 ```bash
 npm run snapshot:generate
+npm run snapshot:prepare-hosted
+npm run hosted:publish:dry-run
 npm run build
 ```
 

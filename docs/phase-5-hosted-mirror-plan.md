@@ -1,10 +1,11 @@
 # Warung OS — Phase 5 Hosted Mirror Plan
 
-**Status:** Active — safe local preparation slice started  
-**Opened:** 2026-06-02  
-**Owner:** Raz  
+**Status:** Active — Raz approved hosted-mirror prep beyond local export
+**Opened:** 2026-06-02
+**Approval:** Raz approved continuing Phase 5 on 2026-06-02; live upload/deploy still requires local credentials and explicit command execution.
+**Owner:** Raz
 **Tech lead:** Mia  
-**Scope rule:** Start with local hosted-readiness only. No upload, deployment, paid service, or external account/configuration changes until Raz explicitly confirms the hosting/auth details.
+**Scope rule:** Build hosted-mirror readiness now, but keep it fail-closed: no credentials committed, no service-role key in browser/Vercel, no paid services, and no upload unless the local publisher is explicitly run with real `.env.publish` credentials.
 
 ---
 
@@ -50,7 +51,7 @@ These are implementation defaults, not irreversible product choices:
 
 ### P5.1 — Local hosted export prep
 
-**Status:** In progress
+**Status:** Done
 
 Deliverables:
 
@@ -70,7 +71,7 @@ Acceptance:
 
 ### P5.2 — Hosted data-source boundary
 
-**Status:** Not started
+**Status:** Done
 
 Deliverables:
 
@@ -80,7 +81,7 @@ Deliverables:
 
 ### P5.3 — Supabase/Vercel config templates
 
-**Status:** Not started / requires hosting details before live use
+**Status:** Done as templates / live use still requires local credentials
 
 Deliverables:
 
@@ -91,7 +92,7 @@ Deliverables:
 
 ### P5.4 — Local publisher script
 
-**Status:** Not started / external write path gated
+**Status:** Done as fail-closed bridge / upload not performed
 
 Deliverables:
 
@@ -119,6 +120,13 @@ Deliverables:
 
 ## Current first slice
 
-Build and validate the local hosted export package. This lets us continue Phase 5 without deploying anything yet.
+P5.1 through P5.4 are implemented as safe, fail-closed local readiness work:
+
+- `npm run snapshot:prepare-hosted` prepares and validates the gitignored export.
+- `npm run hosted:publish:dry-run` validates the prepared export and prints the Supabase target without upload.
+- `npm run hosted:publish -- --upload` is the only command that can upload, and it requires real local `.env.publish` credentials.
+- The frontend can now distinguish local/prepared/remote data sources plus unavailable/auth/stale states.
+
+Next true product step is P5.5: implement the actual Supabase Auth wall and hosted deployment target after Raz provides/chooses the project/account/domain.
 
 <!-- authored by Mia, 2026-06-02 -->

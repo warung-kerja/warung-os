@@ -5,7 +5,7 @@
 
 import { createContext, useContext, useState, useEffect } from 'react'
 import type { ReactNode } from 'react'
-import type { WarungData, WarungSnapshot } from '../types/snapshot'
+import type { WarungData } from '../types/snapshot'
 import {
   projectFixtures,
   teamMemberFixtures,
@@ -26,6 +26,7 @@ import {
   wikiFixtures,
 } from './fixtures'
 import { loadSnapshot } from './snapshotLoader'
+import type { SnapshotLoadResult } from './snapshotLoader'
 
 function buildFixtureData(): WarungData {
   return {
@@ -33,6 +34,9 @@ function buildFixtureData(): WarungData {
       sourceMode: 'fixture',
       generatedAt: null,
       freshness: 'unavailable',
+      runtimeSource: 'fixture',
+      runtimeStatus: 'unavailable',
+      snapshotUrl: null,
       profile: null,
       warnings: [],
       adapterWarnings: {},
@@ -59,13 +63,18 @@ function buildFixtureData(): WarungData {
   }
 }
 
-function snapshotToData(snapshot: WarungSnapshot): WarungData {
-  const { meta, home, projects, operations, wiki } = snapshot
+function snapshotToData(result: SnapshotLoadResult): WarungData {
+  if (!result.snapshot) throw new Error('snapshotToData requires a loaded snapshot')
+  const { meta, home, projects, operations, wiki } = result.snapshot
+  const freshness = result.status === 'stale' ? 'stale' : 'fresh'
   return {
     meta: {
       sourceMode: meta.source_mode,
       generatedAt: meta.generated_at,
-      freshness: 'fresh',
+      freshness,
+      runtimeSource: result.source.mode,
+      runtimeStatus: result.status,
+      snapshotUrl: result.source.url,
       profile: meta.profile,
       warnings: meta.warnings,
       adapterWarnings: meta.adapter_warnings,
@@ -111,13 +120,23 @@ export function WarungDataProvider({ children }: { children: ReactNode }) {
     loadSnapshot().then(result => {
       if (result.snapshot) {
         setState({
-          data: snapshotToData(result.snapshot),
+          data: snapshotToData(result),
           isLoading: false,
           loadError: null,
         })
       } else {
         setState(prev => ({
           ...prev,
+          data: {
+            ...prev.data,
+            meta: {
+              ...prev.data.meta,
+              runtimeSource: result.source.mode,
+              runtimeStatus: result.status,
+              snapshotUrl: result.source.url || null,
+              freshness: result.status === 'stale' ? 'stale' : 'unavailable',
+            },
+          },
           isLoading: false,
           loadError: result.error,
         }))

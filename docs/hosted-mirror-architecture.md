@@ -1,7 +1,7 @@
 # Warung OS — Auth-Gated Hosted Mirror Architecture
 
-**Status:** Phase 5 active — safe local preparation started
-**Owner:** Mia (tech lead), Raz (approval required before any deployment)
+**Status:** Phase 5 active — P5.1-P5.4 readiness implemented fail-closed
+**Owner:** Mia (tech lead), Raz (approval required before live deployment/account changes)
 **Date:** 2026-06-01; reopened 2026-06-02
 **Implements:** CLAUDE.md § Remote access direction; Epic Phase 5 — Hosted mirror
 
@@ -28,8 +28,11 @@ LOCAL MACHINE (Raz's workstation)
 │         ↓                                           │
 │  public/snapshots/latest.json  (gitignored)         │
 │         ↓                                           │
-│  [Phase 5] Publisher script (NEW)                   │
-│         ↓  (push curated snapshot)                  │
+│  npm run snapshot:prepare-hosted                      │
+│         ↓                                           │
+│  hosted-export/latest.json + manifest (gitignored) │
+│         ↓                                           │
+│  npm run hosted:publish -- --upload                 │
 │         ↓  (never pushes secrets or transcripts)    │
 └─────────────────────────────────────────────────────┘
                │
@@ -63,16 +66,17 @@ HOSTED APP (Vercel)
 `scripts/publish-snapshot.mjs`
 
 Responsibilities:
-- Runs after `npm run snapshot:generate` (or as a combined command).
-- Applies an optional extra sanitization pass (confirm no absolute paths, secrets, or transcripts).
-- Pushes the snapshot to Supabase Storage OR upserts rows into Supabase DB tables.
+- Runs after `npm run snapshot:prepare-hosted` validates and packages the local export.
+- Verifies `hosted-export/latest.json` against `hosted-export/manifest.json` before upload.
+- Defaults to dry-run via `npm run hosted:publish:dry-run`; no upload happens unless `--upload` is passed.
+- Pushes the prepared snapshot to Supabase Storage when real local `.env.publish` credentials exist.
 - Uses the Supabase service-role key from a local `.env.publish` file (never committed).
-- Records the publish run in a local log and as a `sync_runs` entry in the DB.
 - Never executes browser-originated commands — publisher is always local/Hermes-side.
 
 Trigger options:
-- Manual: `npm run snapshot:publish`
-- Scheduled: Hermes cron job (Raz's local machine only).
+- Dry-run validation: `npm run hosted:publish:dry-run`
+- Manual upload: `npm run hosted:publish -- --upload`
+- Scheduled: Hermes cron job later, on Raz's local machine only, after upload credentials are confirmed.
 
 Safety contract:
 - Same redaction rules as `generate-snapshot.mjs` (no secrets, OAuth tokens, transcripts, raw memories).
@@ -191,7 +195,7 @@ interface SyncRequest {
 
 The hosted app should show `DATA SOURCE: STALE` when the snapshot is older than a threshold.
 
-Proposed `max_age_minutes` extension to `SnapshotMeta` (to be added in Phase 5):
+Proposed `max_age_minutes` extension to `SnapshotMeta` (implemented in Phase 5):
 
 ```typescript
 interface SnapshotMeta {
@@ -235,14 +239,14 @@ Freshness display logic (hosted only):
 
 ## Implementation sequence (Phase 5)
 
-1. Safe local prep: write `scripts/prepare-hosted-snapshot.mjs` to validate and package a hosted export without uploading anything.
-2. Raz confirms Supabase project and bucket name to use.
-3. Mia creates Storage bucket and RLS policy (no new account needed if MCO project is reused or a new project in existing account).
-4. Mia writes `scripts/publish-snapshot.mjs` with extra sanitization pass and explicit fail-closed credential handling.
-5. Mia adds Supabase client and auth wall to the React app.
-6. Mia deploys to Vercel with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` set.
-7. Mia writes local publisher bridge with `sync_requests` poll loop.
-8. Raz smoke-tests from a second browser/device.
+1. Done: Safe local prep via `scripts/prepare-hosted-snapshot.mjs` validates and packages a hosted export without uploading anything.
+2. Done: Hosted data-source boundary supports local/prepared/remote modes with stale/auth/unavailable states.
+3. Done: Supabase/Vercel config templates document private bucket defaults and local-only publisher secrets.
+4. Done: `scripts/publish-snapshot.mjs` validates the prepared export, defaults to dry-run, and fails closed without `.env.publish` + `--upload`.
+5. Next: choose/confirm Supabase project and create private Storage bucket/RLS policy.
+6. Next: add Supabase client and auth wall to the React app.
+7. Next: deploy to Vercel with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` set.
+8. Later: write local publisher bridge with `sync_requests` poll loop if browser-originated refresh requests are still desired.
 9. QA: verify RLS blocks unauthenticated access, stale label shows correctly, browser actions only write to `sync_requests`.
 
 ---
