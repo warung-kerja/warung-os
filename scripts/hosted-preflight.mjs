@@ -11,7 +11,7 @@
  *   3. Env boundaries     — template shape correct, gitignore protects secrets
  *   4. P5.5 blockers      — what Raz must confirm before auth-wall implementation
  *
- * No network calls. No secret reads. No uploads.
+ * No network calls. No uploads. Reads local env state but never prints secret values.
  * Run standalone: node scripts/hosted-preflight.mjs
  * Run via npm:    npm run hosted:preflight
  */
@@ -29,6 +29,8 @@ const EXPORT_FILE = join(ROOT, 'hosted-export', 'latest.json')
 const MANIFEST_FILE = join(ROOT, 'hosted-export', 'manifest.json')
 const ENV_EXAMPLE = join(ROOT, '.env.example')
 const ENV_PUBLISH_EXAMPLE = join(ROOT, '.env.publish.example')
+const ENV_LOCAL = join(ROOT, '.env.local')
+const ENV_PUBLISH = join(ROOT, '.env.publish')
 const GITIGNORE = join(ROOT, '.gitignore')
 const ARCH_DOC = join(ROOT, 'docs', 'hosted-mirror-architecture.md')
 const CONFIG_TEMPLATE = join(ROOT, 'docs', 'supabase-vercel-config-template.md')
@@ -53,6 +55,19 @@ function ageStr(isoTimestamp) {
   const minutes = Math.floor(ms / 60000)
   if (minutes < 60) return `${minutes}m ago`
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m ago`
+}
+
+function parseEnvFile(path) {
+  if (!existsSync(path)) return {}
+  const env = {}
+  for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const eq = trimmed.indexOf('=')
+    if (eq === -1) continue
+    env[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '')
+  }
+  return env
 }
 
 function row(pass, label, detail) {
@@ -144,8 +159,14 @@ function checkHostedExport() {
     row(hashOk, 'sha256 hash verified', hashOk ? `${manifest.sha256.slice(0, 12)}…` : 'mismatch — re-run prepare-hosted'),
   )
 
-  const uploadOk = manifest.upload_performed === false
-  checks.push(row(uploadOk, 'upload_performed: false (ready to publish)', uploadOk ? undefined : 'unexpected state'))
+  const uploadStateOk = manifest.upload_performed === false || manifest.upload_performed === true
+  checks.push(
+    row(
+      uploadStateOk,
+      `upload_performed: ${manifest.upload_performed}`,
+      manifest.upload_performed === true ? 'published to configured remote target' : 'ready to publish',
+    ),
+  )
 
   const hostedSnapshot = JSON.parse(payload)
   const exportScopeOk = hostedSnapshot?.meta?.source_scope === 'hermes-only'
@@ -178,7 +199,8 @@ const BROWSER_SAFE_VARS = [
   { name: 'VITE_WARUNG_REMOTE_AUTH_MODE', note: 'auth mode (P5.5: supabase-auth)' },
   { name: 'VITE_WARUNG_SNAPSHOT_MAX_AGE_MINUTES', note: 'stale threshold' },
   { name: 'VITE_SUPABASE_URL', note: 'P5.5 — public project URL, safe in bundle' },
-  { name: 'VITE_SUPABASE_ANON_KEY', note: 'P5.5 — anon key, safe in bundle' },
+  { name: 'VITE_SUPABASE_ANON_KEY', note: 'P5.5 — legacy anon/public key, safe in bundle' },
+  { name: 'VITE_SUPABASE_PUBLISHABLE_KEY', note: 'P5.5 — current Supabase publishable key, safe in bundle' },
 ]
 
 const PUBLISHER_ONLY_VARS = [
@@ -217,7 +239,12 @@ function checkEnvBoundary() {
   const publishExampleContent = publishExampleExists ? readFileSync(ENV_PUBLISH_EXAMPLE, 'utf8') : ''
 
   // Critical safety rule: service-role key must not leak into browser template
-  const noServiceRoleInBrowser = !envExampleContent.includes('SUPABASE_SERVICE_ROLE_KEY')
+  const browserEnvRuntimeLines = envExampleContent
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'))
+    .join('\n')
+  const noServiceRoleInBrowser = !browserEnvRuntimeLines.includes('SUPABASE_SERVICE_ROLE_KEY')
   checks.push(
     row(
       noServiceRoleInBrowser,
@@ -235,8 +262,8 @@ function checkEnvBoundary() {
   console.log(`\n  ${INFO} Browser-safe (VITE_* — safe in Vercel env vars and frontend bundle):`)
   for (const v of BROWSER_SAFE_VARS) {
     const inTemplate = envExampleContent.includes(v.name)
-    const p55 = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY'].includes(v.name)
-    console.log(`    ${inTemplate ? PASS : INFO} ${v.name.padEnd(38)} ${p55 ? '[P5.5 — not yet in .env.example]' : v.note}`)
+    const p55Missing = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'VITE_SUPABASE_PUBLISHABLE_KEY'].includes(v.name) && !inTemplate
+    console.log(`    ${inTemplate ? PASS : INFO} ${v.name.padEnd(38)} ${p55Missing ? '[P5.5 — not yet in .env.example]' : v.note}`)
   }
 
   console.log(`\n  ${INFO} Publisher-only (local .env.publish — NEVER in browser bundle, Vercel, or git):`)
@@ -252,41 +279,64 @@ function checkEnvBoundary() {
 
 function checkP55Blockers() {
   section('P5.5 AUTH-GATED APP — REMAINING BLOCKERS')
-  console.log(`  All items below require Raz decision/confirmation before implementation:\n`)
+  const localEnv = parseEnvFile(ENV_LOCAL)
+  const publishEnv = parseEnvFile(ENV_PUBLISH)
+  const manifest = existsSync(MANIFEST_FILE) ? JSON.parse(readFileSync(MANIFEST_FILE, 'utf8')) : null
+  const confirmedProject = publishEnv.SUPABASE_URL === 'https://kqkjparpdgcmfkohmtgq.supabase.co'
+  const hasPublicUrl = localEnv.VITE_SUPABASE_URL === 'https://kqkjparpdgcmfkohmtgq.supabase.co'
+  const hasPublicKey = Boolean(localEnv.VITE_SUPABASE_ANON_KEY || localEnv.VITE_SUPABASE_PUBLISHABLE_KEY)
+  const hasPublisher = Boolean(
+    publishEnv.SUPABASE_URL &&
+      publishEnv.SUPABASE_SERVICE_ROLE_KEY &&
+      publishEnv.SUPABASE_STORAGE_BUCKET &&
+      publishEnv.SUPABASE_STORAGE_OBJECT,
+  )
+  const uploaded = manifest?.upload_performed === true
+
+  console.log(`  Items marked ✓ are unblocked locally. Remaining ✗ items still need Raz/Vercel decision or P5.5 implementation work.\n`)
 
   const blockers = [
     {
       label: 'Confirm Supabase project',
-      detail: 'Which project holds the private snapshot bucket? (MCO project or new?)',
+      detail: 'Warung OS project URL is configured locally.',
+      pass: confirmedProject,
     },
     {
-      label: 'Provide VITE_SUPABASE_URL',
-      detail: 'Public project URL — browser-safe, set as Vercel env var',
+      label: 'Provide browser-safe Supabase URL',
+      detail: 'VITE_SUPABASE_URL is present in local frontend env.',
+      pass: hasPublicUrl,
     },
     {
-      label: 'Provide VITE_SUPABASE_ANON_KEY',
-      detail: 'Anon/public key — browser-safe, set as Vercel env var',
+      label: 'Provide browser-safe Supabase key',
+      detail: 'Anon/publishable key is present in local frontend env.',
+      pass: hasPublicKey,
     },
     {
       label: 'Create .env.publish from .env.publish.example',
-      detail: 'Add real SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY — local Mac only',
+      detail: 'Publisher env exists locally; service-role key stays out of Vite/Vercel/git.',
+      pass: hasPublisher,
     },
     {
       label: 'Create Supabase Storage private bucket',
-      detail: 'Bucket: warung-os-snapshots; private; RLS policy (see hosted-mirror-architecture.md)',
+      detail: uploaded
+        ? 'Bucket/object accepted latest upload; bucket was created private via Supabase Storage API.'
+        : 'Bucket: warung-os-snapshots; private; RLS policy (see hosted-mirror-architecture.md)',
+      pass: uploaded,
     },
     {
       label: 'Confirm Vercel target project/subdomain',
       detail: 'Existing Vercel account OK — just needs project choice; Vercel default subdomain first',
+      pass: false,
     },
     {
-      label: 'Set VITE_WARUNG_REMOTE_AUTH_MODE=supabase-auth in Vercel',
-      detail: 'Currently supabase-auth-placeholder (fail-closed); real value enables the auth wall',
+      label: 'Implement hosted auth wall and set Vercel auth mode',
+      detail: 'Local app still uses the fail-closed Supabase auth placeholder until P5.5 is built.',
+      pass: false,
     },
   ]
 
   for (const b of blockers) {
-    console.log(`  ${FAIL} ${b.label}`)
+    console.log(`  ${b.pass ? PASS : FAIL} ${b.label}`)
     console.log(`    ${INFO} ${b.detail}`)
   }
 
@@ -303,7 +353,8 @@ function checkP55Blockers() {
   console.log(`    · Authenticated signed-URL fetch from private bucket`)
   console.log(`    · Vercel deploy with public VITE_SUPABASE_* env vars`)
 
-  return { pass: false, blockerCount: blockers.length }
+  const blockerCount = blockers.filter((b) => !b.pass).length
+  return { pass: blockerCount === 0, blockerCount }
 }
 
 // ─── summary ─────────────────────────────────────────────────────────────────
@@ -327,7 +378,11 @@ function main() {
   console.log(
     `  ${envResult.pass ? PASS : FAIL} Env variable boundaries: ${envResult.pass ? 'correct — no secret leakage into browser templates' : 'needs attention'}`,
   )
-  console.log(`  ${FAIL} P5.5 implementation:     blocked — ${p55Result.blockerCount} items need Raz decision`)
+  console.log(
+    `  ${p55Result.pass ? PASS : FAIL} P5.5 implementation:     ${
+      p55Result.pass ? 'ready for implementation' : `blocked — ${p55Result.blockerCount} item(s) need Raz/Vercel decision`
+    }`,
+  )
   console.log('')
 
   const locallyReady = snapshotResult.pass && exportResult.pass && envResult.pass
