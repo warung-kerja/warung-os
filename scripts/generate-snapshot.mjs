@@ -417,14 +417,14 @@ function collectSourceHealth() {
 
   rows.push({
     id: 'sh-hermes-team-members-adapter',
-    label: 'Hermes team member status adapter source',
+    label: 'Hermes profile roster adapter source',
     source_type: 'adapter',
-    exists: false,
-    readable: false,
+    exists: true,
+    readable: true,
     modified_at: null,
     age_hours: null,
-    status: 'warn',
-    error: 'Static placeholder present, but no live Hermes agent status source is defined yet',
+    status: 'ok',
+    error: 'Profile roster is discovered from safe Hermes config metadata. Live presence/current-task is not available yet, so statuses are marked waiting.',
     synced_at: nowISO,
   })
 
