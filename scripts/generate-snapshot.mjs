@@ -43,6 +43,7 @@ import { fileURLToPath } from 'url'
 import { collectCronJobs } from './adapters/hermes-cron.mjs'
 import { collectProviderHealth } from './adapters/hermes-provider-health.mjs'
 import { collectToolUsage } from './adapters/hermes-tool-usage.mjs'
+import { collectSessionActivity } from './adapters/hermes-session-activity.mjs'
 import { collectDotDelegation } from './adapters/hermes-dot-delegation.mjs'
 import { collectTeamMembers } from './adapters/hermes-team-members.mjs'
 
@@ -827,9 +828,10 @@ const cronJobs         = collectCronJobs(HERMES_PROFILES, nowISO)
 const obsidianResult   = collectObsidianProjects()
 const wikiResult       = collectWikiEntries()
 const ticktickResult   = collectTickTickKanban()
-const tokenResult      = collectSessionTokenUsage()
-const toolUsageResult  = collectToolUsage(HERMES_PROFILES, nowISO)
-const dotDelegResult   = collectDotDelegation(HERMES_PROFILES, nowISO)
+const tokenResult           = collectSessionTokenUsage()
+const toolUsageResult       = collectToolUsage(HERMES_PROFILES, nowISO)
+const sessionActivityResult = collectSessionActivity(HERMES_PROFILES, nowISO)
+const dotDelegResult        = collectDotDelegation(HERMES_PROFILES, nowISO)
 const teamMembersResult = collectTeamMembers(HERMES_PROFILES, nowISO)
 // sourceHealth runs after other collectors so it can reflect live state.db presence
 const sourceHealth     = collectSourceHealth()
@@ -891,6 +893,9 @@ const adapterWarnings = {
   token_usage: tokenResult.ok
     ? `Session token usage (state.db sessions) connected. ${tokenResult.profileCount} profile(s). model_token_daily: ${tokenResult.modelDaily.length} row(s). agent_token_daily: ${tokenResult.agentDaily.length} row(s). Tool usage (state.db messages) connected: ${toolUsageResult.daily.length} tool-day row(s) from ${toolUsageResult.profileCount} profile(s) (${toolUsageResult.rowCount} raw query rows). input/output/cache token split unavailable — messages table stores a single token_count per message.`
     : `Session token usage unavailable: ${tokenResult.error}. Tool usage: ${toolUsageResult.daily.length > 0 ? `${toolUsageResult.daily.length} tool-day row(s) from ${toolUsageResult.profileCount} profile(s)` : 'no data'}.`,
+  session_activity: sessionActivityResult.daily.length > 0
+    ? `Session activity feed connected (state.db sessions). ${sessionActivityResult.profileCount} profile(s). ${sessionActivityResult.daily.length} day-source row(s) (${sessionActivityResult.rowCount} raw query rows). 30-day window. Reads: started_at, ended_at, source, model, message_count, tool_call_count, input_tokens, output_tokens. Never reads: title, system_prompt, model_config, handoff_state, billing/cost fields, user_id.`
+    : `Session activity feed: no data found in sessions table across ${sessionActivityResult.profileCount} profile(s) — state.db may be absent or schema incompatible.`,
   agent_status: teamMembersResult.note,
   dot_delegation: dotDelegResult.warning,
   obsidian_projects: obsidianResult.ok
@@ -1009,6 +1014,9 @@ const snapshot = {
     // Tool usage — read from Hermes state.db messages table (tool_name + token_count only; no content).
     // input/output/cache token split is 0 — messages table stores a single token_count per message.
     tool_usage_daily: toolUsageResult.daily,
+    // Session activity feed — per (day, source) aggregate from sessions table, 30-day window.
+    // Aggregate metadata only: no titles, prompts, content, or credential fields.
+    session_activity_daily: sessionActivityResult.daily,
 
     cron_jobs: cronJobs,
     source_health: sourceHealth,
@@ -1034,6 +1042,9 @@ const snapshot = {
           tool_usage_adapter: toolUsageResult.daily.length > 0
             ? `ok (${toolUsageResult.daily.length} tool-day rows, ${toolUsageResult.profileCount} profile(s), ${toolUsageResult.rowCount} raw rows)`
             : 'no tool usage data found in messages table',
+          session_activity_adapter: sessionActivityResult.daily.length > 0
+            ? `ok (${sessionActivityResult.daily.length} day-source rows, ${sessionActivityResult.profileCount} profile(s), ${sessionActivityResult.rowCount} raw rows)`
+            : 'no session activity data found in sessions table',
           obsidian_projects_adapter: obsidianResult.ok ? `ok (${obsidianResult.projects.length} projects)` : `failed: ${obsidianResult.error}`,
           obsidian_wiki_adapter: wikiResult.ok ? `ok (${wikiResult.entries.length} entries)` : `failed: ${wikiResult.error}`,
           ticktick_board_adapter: ticktickResult.ok
@@ -1079,6 +1090,7 @@ console.log(`[warung-os] Projects in snapshot: ${projectItems.length}`)
 console.log(`[warung-os] TickTick board: ${ticktickResult.ok ? `ok  (${ticktickResult.boards.reduce((n, b) => n + b.task_count, 0)} task(s), cache ${ticktickResult.cache_age_hours}h old)` : `UNAVAIL: ${ticktickResult.error}`}`)
 console.log(`[warung-os] Token usage:    ${tokenResult.ok ? `ok  (${tokenResult.profileCount} profile(s), ${tokenResult.modelDaily.length} model-day, ${tokenResult.agentDaily.length} source-day rows)` : `UNAVAIL: ${tokenResult.error}`}`)
 console.log(`[warung-os] Tool usage:    ${toolUsageResult.daily.length > 0 ? `ok  (${toolUsageResult.daily.length} tool-day row(s), ${toolUsageResult.profileCount} profile(s), ${toolUsageResult.rowCount} raw rows)` : 'UNAVAIL: no tool usage data in messages table'}`)
+console.log(`[warung-os] Session activity: ${sessionActivityResult.daily.length > 0 ? `ok  (${sessionActivityResult.daily.length} day-source row(s), ${sessionActivityResult.profileCount} profile(s), ${sessionActivityResult.rowCount} raw rows, 30d)` : 'UNAVAIL: no session activity data'}`)
 console.log(`[warung-os] Duration:       ${durationMs}ms`)
 console.log(`[warung-os] Warnings:`)
 warnings.forEach(w => console.log(`  - ${w}`))

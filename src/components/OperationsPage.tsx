@@ -264,11 +264,12 @@ function OverviewTab({ data }: { data: WarungData }) {
 const SOURCE_COLORS: Record<string, string> = { cron: '', telegram: 'blue', cli: 'teal', acp: 'ok' }
 
 function UsageTab({ data }: { data: WarungData }) {
-  const { agentTokenDaily, modelTokenDaily, toolUsageDaily } = data
+  const { agentTokenDaily, modelTokenDaily, toolUsageDaily, sessionActivityDaily } = data
 
-  const hasAgentData = agentTokenDaily.length > 0
-  const hasModelData = modelTokenDaily.length > 0
-  const hasToolData  = toolUsageDaily.length > 0
+  const hasAgentData    = agentTokenDaily.length > 0
+  const hasModelData    = modelTokenDaily.length > 0
+  const hasToolData     = toolUsageDaily.length > 0
+  const hasActivityData = sessionActivityDaily.length > 0
 
   // Derive 7-day window from data or fall back to today
   const allDates = [...new Set([...agentTokenDaily, ...modelTokenDaily].map(r => r.date))].sort()
@@ -414,7 +415,94 @@ function UsageTab({ data }: { data: WarungData }) {
             </div>
         }
       </div>
+
+      <div className="gap-sm" />
+
+      <div className="ops-section">
+        <div className="ops-section-label">Session activity · Hermes state.db · 14d</div>
+        {!hasActivityData
+          ? <div className="panel"><UnavailableNote label="session activity" /><p style={{ fontSize: 11, color: 'var(--muted)' }}>Session activity adapter not yet producing data — state.db may be absent.</p></div>
+          : <ActivityFeedPanel rows={sessionActivityDaily} latestDate={latestDate} />
+        }
+      </div>
     </>
+  )
+}
+
+const ACTIVITY_SOURCE_COLORS: Record<string, string> = {
+  cron: '',
+  telegram: 'blue',
+  cli: 'teal',
+  acp: 'ok',
+  tui: 'warn',
+}
+
+function ActivityFeedPanel({ rows, latestDate }: { rows: import('../types/warung-os').SessionActivityDaily[]; latestDate: string }) {
+  const days14 = buildLast7Days(latestDate + 'T12:00:00Z', 14)
+  const uniqueSources = [...new Set(rows.map(r => r.source))].sort()
+
+  // 14-day total sessions per day (all sources combined)
+  const dailyTotals = days14.map(d =>
+    rows.filter(r => r.date === d.full).reduce((s, r) => s + r.session_count, 0)
+  )
+  const maxDaily = Math.max(...dailyTotals, 1)
+
+  // Latest day breakdown per source
+  const latestRows = uniqueSources.map(src => {
+    const r = rows.find(r => r.date === latestDate && r.source === src)
+    return {
+      source: src,
+      session_count:  r?.session_count   ?? 0,
+      tool_call_total: r?.tool_call_total ?? 0,
+      message_total:  r?.message_total   ?? 0,
+      avg_duration_s: r?.avg_duration_s  ?? null,
+      primary_model:  r?.primary_model   ?? null,
+    }
+  }).filter(r => r.session_count > 0)
+
+  const maxSessions = Math.max(...latestRows.map(r => r.session_count), 1)
+
+  function fmtDuration(s: number | null): string {
+    if (s == null) return '—'
+    if (s < 60)  return `${Math.round(s)}s`
+    if (s < 3600) return `${Math.round(s / 60)}m`
+    return `${(s / 3600).toFixed(1)}h`
+  }
+
+  return (
+    <div className="grid grid--2">
+      <div className="panel">
+        <div className="mono" style={{ marginBottom: 10 }}>Sessions per day · all sources</div>
+        <VertBarChart values={dailyTotals} labels={days14.map(d => d.short)} maxValue={maxDaily} colorClass="teal" />
+      </div>
+      <div className="panel panel--alt">
+        <div className="mono" style={{ marginBottom: 10 }}>Latest · {latestDate} — by source</div>
+        {latestRows.length === 0
+          ? <div style={{ fontSize: 11, color: 'var(--muted)', padding: '8px 0' }}>No sessions on {latestDate}</div>
+          : <>
+              {latestRows.map(row => (
+                <HBarRow
+                  key={row.source}
+                  label={row.source}
+                  value={row.session_count}
+                  max={maxSessions}
+                  colorClass={ACTIVITY_SOURCE_COLORS[row.source] ?? ''}
+                />
+              ))}
+              <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+                {latestRows.map(row => (
+                  <div key={row.source} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '3px 0' }}>
+                    <span style={{ color: 'var(--soft)' }}>{row.source}</span>
+                    <span className="mono" style={{ fontSize: 10 }}>
+                      {row.tool_call_total} tools · avg {fmtDuration(row.avg_duration_s)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+        }
+      </div>
+    </div>
   )
 }
 

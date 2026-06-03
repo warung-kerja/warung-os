@@ -59,6 +59,7 @@ function buildFixtureData(): WarungData {
     dotDelegation: dotDelegationFixtures,
     gatewayStatus: gatewayStatusFixtures,
     providerCatalog: providerCatalogFixtures,
+    sessionActivityDaily: [],
     wiki: wikiFixtures,
   }
 }
@@ -97,6 +98,7 @@ function snapshotToData(result: SnapshotLoadResult): WarungData {
     dotDelegation: operations.dot_delegation,
     gatewayStatus: operations.gateway_status ?? [],
     providerCatalog: operations.provider_catalog ?? [],
+    sessionActivityDaily: operations.session_activity_daily ?? [],
     wiki: wiki.entries,
   }
 }

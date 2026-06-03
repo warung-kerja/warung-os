@@ -23,6 +23,7 @@ import type {
   HermesProviderCatalogEntry,
   DotDelegationStatus,
   TickTickKanbanBoard,
+  SessionActivityDaily,
 } from './warung-os'
 
 export type SourceMode = 'fixture' | 'snapshot'
@@ -71,6 +72,9 @@ export interface OperationsSnapshot {
   // Phase 3: gateway connectivity and provider catalog
   gateway_status: HermesGatewayStatus[]
   provider_catalog: HermesProviderCatalogEntry[]
+  // Agent activity feed — per (day, source) session aggregate, 30-day window.
+  // Aggregate metadata only: no titles, prompts, content, or credential fields.
+  session_activity_daily?: SessionActivityDaily[]
 }
 
 export interface WarungSnapshot {
@@ -129,6 +133,8 @@ export interface WarungData {
   // Phase 3: gateway connectivity and provider catalog
   gatewayStatus: HermesGatewayStatus[]
   providerCatalog: HermesProviderCatalogEntry[]
+  // Agent activity feed
+  sessionActivityDaily: SessionActivityDaily[]
   // Wiki
   wiki: WikiEntry[]
 }

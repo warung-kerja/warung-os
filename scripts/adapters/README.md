@@ -53,6 +53,17 @@ Reads from each Hermes profile:
 Status reflects config metadata only — no live API health check or latency measurement is performed.
 Never reads: API keys, OAuth tokens, credentials, session transcripts, delivery targets.
 
+### hermes-session-activity.mjs
+
+**Export:** `collectSessionActivity(profiles, nowISO) → { daily: SessionActivityDaily[], profileCount, rowCount }`
+
+Reads from each Hermes profile's `state.db`:
+- `sessions` table: `started_at`, `ended_at`, `source`, `model`, `message_count`, `tool_call_count`, `input_tokens`, `output_tokens`
+
+Groups by `(day, source, model)` across all profiles (30-day window), then aggregates to `(day, source)` in JS, picking `primary_model` by highest session count. Computes weighted average session duration from `ended_at - started_at`.
+
+Never reads: `title`, `system_prompt`, `model_config`, `handoff_state`, `handoff_error`, `billing_base_url`, `billing_mode`, `estimated_cost_usd`, `actual_cost_usd`, `cost_status`, `cost_source`, or `user_id`.
+
 ### hermes-tool-usage.mjs
 
 **Export:** `collectToolUsage(profiles, nowISO) → { daily: ToolUsageDaily[], profileCount, rowCount }`
@@ -96,5 +107,6 @@ Never reads: `content`, `tool_calls` (arguments), `reasoning`, `system_prompt`, 
 | `hermes-provider-health.mjs` | `config.yaml`, `gateway_state.json`, `provider_models_cache.json` | Connected — config metadata only, no live API |
 | token usage | `state.db` sessions table | Embedded in generator — real data |
 | `hermes-tool-usage.mjs` | `state.db` messages table | Connected — tool_name + token_count, last 7 days; no input/output/cache split |
+| `hermes-session-activity.mjs` | `state.db` sessions table | Connected — (day, source) aggregate: session_count, tool_call_total, avg_duration_s; 30-day window; no titles/prompts/content |
 | `hermes-dot-delegation.mjs` | Hermes delegation tracker | Skeleton — unavailable; no live source defined |
 | `hermes-team-members.mjs` | Hermes agent status | Static placeholder — no live source; documents connection boundary |

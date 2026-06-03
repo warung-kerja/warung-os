@@ -272,6 +272,21 @@ export interface TickTickKanbanBoard {
   cache_age_hours: number | null
 }
 
+// Agent activity feed — per (day, source) session aggregate from Hermes state.db.
+// Privacy boundary: aggregate metadata only — no titles, prompts, content, or secrets.
+export interface SessionActivityDaily {
+  id: string
+  date: string                  // YYYY-MM-DD local day
+  source: string                // execution context: cron | cli | telegram | acp | unknown
+  session_count: number         // sessions started on this day/source
+  message_total: number         // total messages across sessions (integer count only)
+  tool_call_total: number       // total tool calls across sessions (integer count only)
+  total_tokens: number          // input + output tokens summed (no cache split in this view)
+  avg_duration_s: number | null // average session duration in seconds; null if ended_at not set
+  primary_model: string | null  // most-used model for this day/source; null if indeterminate
+  synced_at: string
+}
+
 // ---- AUDIT LOG ----
 
 export type AuditAction =
