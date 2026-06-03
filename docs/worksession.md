@@ -8,9 +8,11 @@ Warung OS
 
 ## Current priority
 
-Phase 5 — hosted mirror, approved fail-closed readiness.
+Phase 5 — live public/no-auth hosted mirror.
 
-Next slice: P5.5 auth-gated hosted app (blocked — waiting on Raz to confirm Supabase project, bucket name, and Vercel target). Run `npm run hosted:preflight` to see the full preflight report; all local checks pass. Remaining unavailable adapters: `dot_delegation` (no live Hermes source defined) and `team_members` (static placeholder; no live agent status adapter). Suggest Raz next unblock P5.5 by confirming Supabase project + Vercel target.
+Current state: Warung OS is live at `https://warung-os-online.vercel.app`; GitHub `warung-kerja/warung-os` auto-deploys `main` to Vercel project `warung-os-online`; Supabase private Storage publishing is configured for `warung-os-snapshots/latest.json`. Raz has explicitly chosen to keep Warung OS simple/no-auth for now, so old P5.5 auth-gated blockers are not current blockers.
+
+Next slice: update stale auth-gated/P5.5 blocker wording in preflight/docs so recurring dispatcher output matches the current public/no-auth direction, then continue the next safe Hermes-only adapter/UI improvement from the tracker. Remaining unavailable adapters: `dot_delegation` (no live Hermes source defined) and `team_members` (static placeholder; no live agent status adapter).
 
 **Hosted mirror preflight slice completed (2026-06-03):** added `scripts/hosted-preflight.mjs` and `npm run hosted:preflight`. The preflight script validates the full local readiness chain in a single pass without contacting Supabase/Vercel: (1) snapshot pipeline — `latest.json` exists, hermes-only scope, is_demo:false, schema_version:1, freshness; (2) hosted export — `hosted-export/latest.json` + `manifest.json` exist, sha256 hash verified, upload_performed:false; (3) env variable boundary — `SUPABASE_SERVICE_ROLE_KEY` absent from browser template, `.env.publish.example` documents all publisher vars, `.gitignore` protects all secret/export files; (4) P5.5 blockers clearly listed with required Raz decisions and next implementation steps. Updated `docs/supabase-vercel-config-template.md` with an explicit env variable hierarchy table showing which vars are browser-safe vs publisher-only and the boundary rule. QA passed: `npm run hosted:preflight` (exit 0, all local checks pass), `npm run snapshot:prepare-hosted`, `npm run hosted:publish:dry-run`, `npm run build`.
 
