@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useWarungData } from '../data/dataSource'
 import { useLocalState } from '../data/localState'
-import type { CanonicalProject, CanonicalTeamMember, ApprovalItem } from '../types/warung-os'
+import type { CanonicalProject, CanonicalTeamMember, ApprovalItem, TickTickKanbanBoard } from '../types/warung-os'
 
 function statusTag(status: string | null): JSX.Element {
   switch (status) {
@@ -31,18 +31,64 @@ function fmtDate(iso: string | null): string {
   return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 }
 
+const ACTIVE_COLUMNS = new Set(['in build', 'build ready', 'qa / review', 'qa/review', 'in progress', 'in review'])
+
+function KanbanBoardPanel({ board }: { board: TickTickKanbanBoard }) {
+  const maxCount = Math.max(...board.column_counts.map(c => c.count), 1)
+  const cacheLabel = board.cache_age_hours != null
+    ? `${board.cache_age_hours.toFixed(1)}h ago`
+    : 'age unknown'
+  const collectedLabel = board.collected_at
+    ? new Date(board.collected_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : '—'
+
+  return (
+    <div className="panel" style={{ marginTop: 1 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div className="mono">Board · TickTick</div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>{board.board_name}</span>
+          <span className="tag">{board.task_count} tasks</span>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gap: 7 }}>
+        {board.column_counts.map(({ column, count }) => {
+          const isActive = ACTIVE_COLUMNS.has(column.toLowerCase())
+          const barWidth = (count / maxCount) * 100
+          return (
+            <div key={column} style={{ display: 'grid', gridTemplateColumns: '140px 28px 1fr', gap: 8, alignItems: 'center' }}>
+              <span style={{ fontSize: 11, color: isActive ? 'var(--fg)' : 'var(--muted)' }}>{column}</span>
+              <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: isActive ? 'var(--signal)' : 'var(--soft)', textAlign: 'right' }}>{count}</span>
+              <div style={{ background: 'var(--bg)', height: 5 }}>
+                <div style={{ width: `${barWidth}%`, height: '100%', background: isActive ? 'var(--signal)' : 'var(--line)' }} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="mono" style={{ marginTop: 12, color: 'var(--muted)', fontSize: 10 }}>
+        Collected {collectedLabel} · {cacheLabel} · read-only cache · no descriptions or comments
+      </div>
+    </div>
+  )
+}
+
 function ProjectDetail({
   project,
   approvals,
   allTeamMembers,
   approvalOverrides,
   updateApprovalStatus,
+  board,
 }: {
   project: CanonicalProject
   approvals: ApprovalItem[]
   allTeamMembers: CanonicalTeamMember[]
   approvalOverrides: Record<string, ApprovalItem['status']>
   updateApprovalStatus: (id: string, title: string, status: ApprovalItem['status']) => void
+  board: TickTickKanbanBoard | null
 }) {
   const approval = approvals.find(a => a.project === project.id)
   const effectiveApproval = approval ? { ...approval, status: approvalOverrides[approval.id] ?? approval.status } : null
@@ -168,6 +214,8 @@ function ProjectDetail({
           )}
         </div>
       </div>
+
+      {board && <KanbanBoardPanel board={board} />}
     </div>
   )
 }
@@ -175,9 +223,12 @@ function ProjectDetail({
 export default function ActiveProjectsPage() {
   const { data } = useWarungData()
   const { localApprovalStates, updateApprovalStatus, recordView } = useLocalState()
-  const { projects, approvals, teamMembers } = data
+  const { projects, approvals, teamMembers, kanbanBoards } = data
   const [selectedId, setSelectedId] = useState<string | null>(projects[0]?.id ?? null)
   const selectedProject = projects.find(p => p.id === selectedId) ?? null
+  const selectedBoard = selectedProject
+    ? (kanbanBoards.find(b => b.board_name.toLowerCase() === selectedProject.name.toLowerCase()) ?? null)
+    : null
 
   return (
     <div className="page">
@@ -249,6 +300,7 @@ export default function ActiveProjectsPage() {
           allTeamMembers={teamMembers}
           approvalOverrides={localApprovalStates}
           updateApprovalStatus={updateApprovalStatus}
+          board={selectedBoard}
         />
       )}
 
