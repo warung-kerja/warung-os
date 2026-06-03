@@ -106,11 +106,11 @@ function HBarRow({ label, value, max, colorClass }: { label: string; value: numb
   )
 }
 
-// Derive last 7 calendar days ending on a given ISO date string (or today).
-function buildLast7Days(anchorISO?: string | null): { short: string; full: string }[] {
+// Derive last n calendar days ending on a given ISO date string (or today).
+function buildLast7Days(anchorISO?: string | null, n = 7): { short: string; full: string }[] {
   const anchor = anchorISO ? new Date(anchorISO) : new Date()
   const result: { short: string; full: string }[] = []
-  for (let i = 6; i >= 0; i--) {
+  for (let i = n - 1; i >= 0; i--) {
     const d = new Date(anchor)
     d.setDate(d.getDate() - i)
     const full = d.toISOString().slice(0, 10)
@@ -425,6 +425,26 @@ function AutomationTab({ data }: { data: WarungData }) {
   const pausedCount = cronJobs.filter(c => !c.enabled).length
   const firstWarn   = cronJobs.find(c => c.status === 'warn')
 
+  // Cron run-history chart — 14 days, aggregated across all jobs
+  const hasDailyHistory = cronJobs.some(j => j.run_history_daily && j.run_history_daily.length > 0)
+  const chartAnchor = cronJobs[0]?.synced_at ?? null
+  const chartDays   = buildLast7Days(chartAnchor, 14)
+  const dailyTotals = chartDays.map(d =>
+    cronJobs.reduce((sum, job) => {
+      const entry = job.run_history_daily?.find(h => h.date === d.full)
+      return sum + (entry?.count ?? 0)
+    }, 0)
+  )
+  const dailyMax = Math.max(...dailyTotals, 1)
+  const jobWindowTotals = cronJobs.map(job => ({
+    job,
+    total: chartDays.reduce((sum, d) => {
+      const entry = job.run_history_daily?.find(h => h.date === d.full)
+      return sum + (entry?.count ?? 0)
+    }, 0),
+  }))
+  const jobMax = Math.max(...jobWindowTotals.map(j => j.total), 1)
+
   return (
     <>
       <div className="ops-section">
@@ -453,6 +473,32 @@ function AutomationTab({ data }: { data: WarungData }) {
                   <div className="metric-note">{cronJobs.find(c => !c.enabled)?.name ?? 'None'}</div>
                 </div>
               </div>
+
+              {hasDailyHistory && (
+                <div className="grid grid--2" style={{ marginBottom: 16 }}>
+                  <div className="panel">
+                    <div className="mono" style={{ marginBottom: 10 }}>
+                      Run activity · 14d · {chartDays[0].full} – {chartDays[chartDays.length - 1].full}
+                    </div>
+                    <VertBarChart values={dailyTotals} labels={chartDays.map(d => d.short)} maxValue={dailyMax} colorClass="teal" />
+                  </div>
+                  <div className="panel panel--alt">
+                    <div className="mono" style={{ marginBottom: 10 }}>Runs per job · 14d window</div>
+                    {jobWindowTotals.map(({ job, total }) => (
+                      <HBarRow
+                        key={job.id}
+                        label={(job.name ?? job.id).slice(0, 26)}
+                        value={total}
+                        max={jobMax}
+                        colorClass="teal"
+                      />
+                    ))}
+                    <div style={{ marginTop: 10, borderTop: '1px solid var(--line)', paddingTop: 8, fontSize: 10, color: 'var(--muted)', fontFamily: 'var(--mono)' }}>
+                      total across all jobs: {dailyTotals.reduce((a, b) => a + b, 0)} run{dailyTotals.reduce((a, b) => a + b, 0) !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="table-wrap">
                 <table className="data-table" style={{ width: '100%' }}>
                   <thead>

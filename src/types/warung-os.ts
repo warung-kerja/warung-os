@@ -98,6 +98,8 @@ export interface CronJobSnapshot {
   completed_runs?: number | null
   // Phase 5: Hermes skill names assigned to this job (non-secret strings)
   skills?: string[] | null
+  // Phase 5.1: 30-day daily run histogram (UTC day buckets from output dir filenames)
+  run_history_daily?: Array<{date: string; count: number}> | null
 }
 
 export interface AgentTokenUsageDaily {

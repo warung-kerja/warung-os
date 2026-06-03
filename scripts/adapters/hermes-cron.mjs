@@ -102,6 +102,34 @@ function _collectCronHealth(profiles, nowISO) {
   return rows
 }
 
+// ---- Internal: 30-day daily run histogram from parsed timestamps ----
+// Buckets all timestamps into UTC calendar days; returns exactly windowDays entries.
+function _buildDailyHistory(allTimestamps, windowDays) {
+  const counts = {}
+  const now = new Date()
+  const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  const cutoffUTC = new Date(todayUTC)
+  cutoffUTC.setUTCDate(cutoffUTC.getUTCDate() - (windowDays - 1))
+  const cutoffDateKey = cutoffUTC.toISOString().slice(0, 10)
+
+  for (const ts of allTimestamps) {
+    const dateKey = String(ts).slice(0, 10)
+    // Compare YYYY-MM-DD strings so the oldest included day is a full UTC calendar day,
+    // not "the last N*24 hours" from the current clock time.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || dateKey < cutoffDateKey) continue
+    counts[dateKey] = (counts[dateKey] ?? 0) + 1
+  }
+
+  const result = []
+  for (let i = windowDays - 1; i >= 0; i--) {
+    const d = new Date(todayUTC)
+    d.setUTCDate(d.getUTCDate() - i)
+    const dateStr = d.toISOString().slice(0, 10)
+    result.push({ date: dateStr, count: counts[dateStr] ?? 0 })
+  }
+  return result
+}
+
 // ---- Internal: cron run history from output filenames ----
 // Reads cron/output/<jobId>/ directory filenames only. File contents are never opened.
 // Filename format: YYYY-MM-DD_HH-MM-SS.md
@@ -139,6 +167,9 @@ function _collectCronRunHistory(profiles) {
             profile: profile.name,
             run_count: files.length,
             recent_run_timestamps: runTimestamps.slice(-5),
+            // All timestamps are kept here for daily histogram computation.
+            // They are not written to the snapshot directly.
+            _all_timestamps: runTimestamps,
           }
         } catch (_) {}
       }
@@ -160,6 +191,7 @@ function _enrichCronJobsWithRunHistory(cronJobsRaw, runHistory) {
       ...job,
       run_count: hist.run_count,
       recent_run_timestamps: hist.recent_run_timestamps,
+      run_history_daily: _buildDailyHistory(hist._all_timestamps ?? [], 30),
     }
   })
 }
