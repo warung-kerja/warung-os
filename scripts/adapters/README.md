@@ -15,6 +15,22 @@ node scripts/adapters/hermes-provider-health.mjs
 
 ## Available adapters
 
+### hermes-dot-delegation.mjs
+
+**Export:** `collectDotDelegation(profiles, nowISO) → { items: [], warning: string }`
+
+**Status: unavailable** — no live Hermes delegation source defined.
+
+Returns an empty array and a documented warning. No data is fabricated. Documents the source shape needed to connect a live delegation tracker when one becomes available.
+
+### hermes-team-members.mjs
+
+**Export:** `collectTeamMembers(profiles, nowISO) → { members: CanonicalTeamMember[], note: string }`
+
+**Status: static placeholder** — no live Hermes agent status source defined.
+
+Returns the known Warung Kerja core agent roster (Baro, Mia, Gabs, Obey) with fixed role/model metadata. Status and `current_task` reflect documented defaults, not live data. Documents the source shape needed once a live agent status adapter is available.
+
 ### hermes-cron.mjs
 
 **Export:** `collectCronJobs(profiles, nowISO) → CronJobSnapshot[]`
@@ -80,5 +96,5 @@ Never reads: `content`, `tool_calls` (arguments), `reasoning`, `system_prompt`, 
 | `hermes-provider-health.mjs` | `config.yaml`, `gateway_state.json`, `provider_models_cache.json` | Connected — config metadata only, no live API |
 | token usage | `state.db` sessions table | Embedded in generator — real data |
 | `hermes-tool-usage.mjs` | `state.db` messages table | Connected — tool_name + token_count, last 7 days; no input/output/cache split |
-| dot delegation | Hermes delegation tracker | Unavailable — live source not yet defined |
-| agent status | Hermes agent status | Placeholder only — live source not yet defined |
+| `hermes-dot-delegation.mjs` | Hermes delegation tracker | Skeleton — unavailable; no live source defined |
+| `hermes-team-members.mjs` | Hermes agent status | Static placeholder — no live source; documents connection boundary |

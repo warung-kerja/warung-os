@@ -275,16 +275,16 @@ function checkEnvBoundary() {
   return { pass: checks.every((c) => c !== false), checks }
 }
 
-// ─── 4. P5.5 blockers ────────────────────────────────────────────────────────
+// ─── 4. Hosting & publishing status ──────────────────────────────────────────
+// Vercel is live (public, no-auth). P5.5 auth-gate is deferred — Raz chose
+// public/no-auth for now. This section tracks the snapshot publishing pipeline.
 
-function checkP55Blockers() {
-  section('P5.5 AUTH-GATED APP — REMAINING BLOCKERS')
-  const localEnv = parseEnvFile(ENV_LOCAL)
+function checkPublishingStatus() {
+  section('HOSTING & PUBLISHING STATUS')
   const publishEnv = parseEnvFile(ENV_PUBLISH)
   const manifest = existsSync(MANIFEST_FILE) ? JSON.parse(readFileSync(MANIFEST_FILE, 'utf8')) : null
+
   const confirmedProject = publishEnv.SUPABASE_URL === 'https://kqkjparpdgcmfkohmtgq.supabase.co'
-  const hasPublicUrl = localEnv.VITE_SUPABASE_URL === 'https://kqkjparpdgcmfkohmtgq.supabase.co'
-  const hasPublicKey = Boolean(localEnv.VITE_SUPABASE_ANON_KEY || localEnv.VITE_SUPABASE_PUBLISHABLE_KEY)
   const hasPublisher = Boolean(
     publishEnv.SUPABASE_URL &&
       publishEnv.SUPABASE_SERVICE_ROLE_KEY &&
@@ -293,49 +293,39 @@ function checkP55Blockers() {
   )
   const uploaded = manifest?.upload_performed === true
 
-  console.log(`  Items marked ✓ are unblocked locally. Remaining ✗ items still need Raz/Vercel decision or P5.5 implementation work.\n`)
+  // Vercel is live — informational only, no network check needed.
+  console.log(`  ${PASS} Vercel deployment live: warung-os-online.vercel.app (public, no-auth)`)
+  console.log(`    ${INFO} GitHub warung-kerja/warung-os auto-deploys main branch to Vercel.`)
+  console.log(`    ${INFO} Auth gate (P5.5) is deferred — Raz chose public/no-auth for now.`)
+  console.log('')
 
-  const blockers = [
+  console.log(`  Publishing pipeline — items needed to push snapshots to Supabase Storage:`)
+
+  const publishingChecks = [
     {
-      label: 'Confirm Supabase project',
-      detail: 'Warung OS project URL is configured locally.',
+      label: 'Supabase project configured in .env.publish',
+      detail: confirmedProject
+        ? 'warung-os Supabase project URL confirmed in .env.publish.'
+        : 'Set SUPABASE_URL=https://kqkjparpdgcmfkohmtgq.supabase.co in .env.publish.',
       pass: confirmedProject,
     },
     {
-      label: 'Provide browser-safe Supabase URL',
-      detail: 'VITE_SUPABASE_URL is present in local frontend env.',
-      pass: hasPublicUrl,
-    },
-    {
-      label: 'Provide browser-safe Supabase key',
-      detail: 'Anon/publishable key is present in local frontend env.',
-      pass: hasPublicKey,
-    },
-    {
-      label: 'Create .env.publish from .env.publish.example',
-      detail: 'Publisher env exists locally; service-role key stays out of Vite/Vercel/git.',
+      label: 'Full publisher credentials in .env.publish',
+      detail: hasPublisher
+        ? 'SUPABASE_URL, SERVICE_ROLE_KEY, bucket, and object path all present.'
+        : 'Create .env.publish from .env.publish.example with all four required vars.',
       pass: hasPublisher,
     },
     {
-      label: 'Create Supabase Storage private bucket',
+      label: 'At least one snapshot uploaded to Supabase Storage',
       detail: uploaded
-        ? 'Bucket/object accepted latest upload; bucket was created private via Supabase Storage API.'
-        : 'Bucket: warung-os-snapshots; private; RLS policy (see hosted-mirror-architecture.md)',
+        ? 'upload_performed: true recorded in manifest — bucket is confirmed writable.'
+        : 'Run npm run hosted:publish -- --upload once publisher credentials are set.',
       pass: uploaded,
-    },
-    {
-      label: 'Confirm Vercel target project/subdomain',
-      detail: 'Existing Vercel account OK — just needs project choice; Vercel default subdomain first',
-      pass: false,
-    },
-    {
-      label: 'Implement hosted auth wall and set Vercel auth mode',
-      detail: 'Local app still uses the fail-closed Supabase auth placeholder until P5.5 is built.',
-      pass: false,
     },
   ]
 
-  for (const b of blockers) {
+  for (const b of publishingChecks) {
     console.log(`  ${b.pass ? PASS : FAIL} ${b.label}`)
     console.log(`    ${INFO} ${b.detail}`)
   }
@@ -346,15 +336,8 @@ function checkP55Blockers() {
   console.log(`  ${archDocOk ? PASS : FAIL} docs/hosted-mirror-architecture.md`)
   console.log(`  ${configTemplateOk ? PASS : FAIL} docs/supabase-vercel-config-template.md`)
 
-  console.log(`\n  Once blockers are resolved, P5.5 adds:`)
-  console.log(`    · Supabase JS SDK install (@supabase/supabase-js)`)
-  console.log(`    · Auth wall component (magic link → razifdjamaludin@gmail.com)`)
-  console.log(`    · Replace supabase-auth-placeholder in snapshotLoader.ts`)
-  console.log(`    · Authenticated signed-URL fetch from private bucket`)
-  console.log(`    · Vercel deploy with public VITE_SUPABASE_* env vars`)
-
-  const blockerCount = blockers.filter((b) => !b.pass).length
-  return { pass: blockerCount === 0, blockerCount }
+  const pendingCount = publishingChecks.filter((b) => !b.pass).length
+  return { pass: pendingCount === 0, pendingCount }
 }
 
 // ─── summary ─────────────────────────────────────────────────────────────────
@@ -366,7 +349,7 @@ function main() {
   const snapshotResult = checkSnapshotPipeline()
   const exportResult = checkHostedExport()
   const envResult = checkEnvBoundary()
-  const p55Result = checkP55Blockers()
+  const publishResult = checkPublishingStatus()
 
   section('PREFLIGHT SUMMARY')
   console.log(
@@ -379,8 +362,11 @@ function main() {
     `  ${envResult.pass ? PASS : FAIL} Env variable boundaries: ${envResult.pass ? 'correct — no secret leakage into browser templates' : 'needs attention'}`,
   )
   console.log(
-    `  ${p55Result.pass ? PASS : FAIL} P5.5 implementation:     ${
-      p55Result.pass ? 'ready for implementation' : `blocked — ${p55Result.blockerCount} item(s) need Raz/Vercel decision`
+    `  ${PASS} Vercel deployment:       live at warung-os-online.vercel.app (public, no-auth)`,
+  )
+  console.log(
+    `  ${publishResult.pass ? PASS : INFO} Publishing pipeline:     ${
+      publishResult.pass ? 'publisher configured and upload verified' : `${publishResult.pendingCount} item(s) pending before live Supabase publishing`
     }`,
   )
   console.log('')
@@ -390,10 +376,10 @@ function main() {
   if (locallyReady) {
     console.log('  RESULT: LOCAL SNAPSHOT PIPELINE READY')
     console.log('  The snapshot is prepared and passes all safety checks.')
-    console.log('  P5.5 is blocked waiting on Raz decisions (see above).')
-    console.log('  When Raz confirms project/bucket/Vercel, the auth wall can be implemented.')
+    console.log('  Vercel is live (public, no-auth). Publishing pipeline items above are optional.')
+    console.log('  Auth gate (P5.5) is deferred — Raz chose public/no-auth for now.')
   } else {
-    console.log('  RESULT: LOCAL SETUP INCOMPLETE — fix the above items before unblocking P5.5')
+    console.log('  RESULT: LOCAL SETUP INCOMPLETE — fix the above items')
     if (!snapshotResult.pass) console.log('  → Run: npm run snapshot:generate')
     if (!exportResult.pass) console.log('  → Run: npm run snapshot:prepare-hosted')
   }

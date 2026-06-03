@@ -154,9 +154,9 @@ is older than the threshold.
 
 ### Hosted mirror direction
 
-Warung OS is expected to become accessible from Raz's other computers, similar to Mission Control Online. The approved direction is an auth-gated hosted snapshot mirror fed by curated local snapshots/sync bridge data. Browser actions must remain requests/approvals, not arbitrary remote command execution.
+Warung OS is live at `warung-os-online.vercel.app` (public, no-auth). GitHub `warung-kerja/warung-os` auto-deploys `main` to Vercel. The Supabase snapshot publishing pipeline is configured for pushing `hosted-export/latest.json` to Supabase Storage.
 
-See `docs/hosted-mirror-architecture.md` for the full Phase 5 architecture draft.
+Auth gate (P5.5) is deferred — Raz chose public/no-auth for now. If auth is needed later, see `docs/hosted-mirror-architecture.md` for the full auth-gated architecture plan. Browser actions must remain requests/approvals, not arbitrary remote command execution.
 
 ### projects.kanban_boards adapter detail
 

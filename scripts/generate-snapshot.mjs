@@ -29,10 +29,8 @@
  *   agent_token_daily   — aggregate token totals by execution source (cron/telegram/cli) from Hermes state.db
  *
  * PLACEHOLDER / UNAVAILABLE:
- *   tool_usage_daily — requires messages table adapter (deferred)
- *   dot_delegation   — requires live Hermes delegation tracker
- *   wiki.entries     — requires Obsidian adapter
- *   team_members     — static; requires live Hermes agent status adapter
+ *   dot_delegation   — skeleton adapter in hermes-dot-delegation.mjs; no live source defined
+ *   team_members     — static placeholder in hermes-team-members.mjs; no live agent status source
  *
  * TickTick note: run `npm run ticktick:collect` first to populate the cache.
  * The generator reads the cache file; it never handles TickTick credentials directly.
@@ -45,6 +43,8 @@ import { fileURLToPath } from 'url'
 import { collectCronJobs } from './adapters/hermes-cron.mjs'
 import { collectProviderHealth } from './adapters/hermes-provider-health.mjs'
 import { collectToolUsage } from './adapters/hermes-tool-usage.mjs'
+import { collectDotDelegation } from './adapters/hermes-dot-delegation.mjs'
+import { collectTeamMembers } from './adapters/hermes-team-members.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
@@ -399,6 +399,32 @@ function collectSourceHealth() {
     error: ttCacheExists
       ? (ttCacheStale ? `Cache is ${ttCacheAgeHours}h old — run npm run ticktick:collect to refresh` : null)
       : 'TickTick cache not found — run npm run ticktick:collect to populate',
+    synced_at: nowISO,
+  })
+
+  rows.push({
+    id: 'sh-hermes-dot-delegation-adapter',
+    label: 'Hermes Dot delegation adapter source',
+    source_type: 'adapter',
+    exists: false,
+    readable: false,
+    modified_at: null,
+    age_hours: null,
+    status: 'warn',
+    error: 'Adapter skeleton present, but no live Hermes delegation source is defined yet',
+    synced_at: nowISO,
+  })
+
+  rows.push({
+    id: 'sh-hermes-team-members-adapter',
+    label: 'Hermes team member status adapter source',
+    source_type: 'adapter',
+    exists: false,
+    readable: false,
+    modified_at: null,
+    age_hours: null,
+    status: 'warn',
+    error: 'Static placeholder present, but no live Hermes agent status source is defined yet',
     synced_at: nowISO,
   })
 
@@ -803,6 +829,8 @@ const wikiResult       = collectWikiEntries()
 const ticktickResult   = collectTickTickKanban()
 const tokenResult      = collectSessionTokenUsage()
 const toolUsageResult  = collectToolUsage(HERMES_PROFILES, nowISO)
+const dotDelegResult   = collectDotDelegation(HERMES_PROFILES, nowISO)
+const teamMembersResult = collectTeamMembers(HERMES_PROFILES, nowISO)
 // sourceHealth runs after other collectors so it can reflect live state.db presence
 const sourceHealth     = collectSourceHealth()
 const durationMs       = Date.now() - startMs
@@ -863,7 +891,8 @@ const adapterWarnings = {
   token_usage: tokenResult.ok
     ? `Session token usage (state.db sessions) connected. ${tokenResult.profileCount} profile(s). model_token_daily: ${tokenResult.modelDaily.length} row(s). agent_token_daily: ${tokenResult.agentDaily.length} row(s). Tool usage (state.db messages) connected: ${toolUsageResult.daily.length} tool-day row(s) from ${toolUsageResult.profileCount} profile(s) (${toolUsageResult.rowCount} raw query rows). input/output/cache token split unavailable — messages table stores a single token_count per message.`
     : `Session token usage unavailable: ${tokenResult.error}. Tool usage: ${toolUsageResult.daily.length > 0 ? `${toolUsageResult.daily.length} tool-day row(s) from ${toolUsageResult.profileCount} profile(s)` : 'no data'}.`,
-  agent_status: 'Team member status is static placeholder — live Hermes agent status adapter not yet connected.',
+  agent_status: teamMembersResult.note,
+  dot_delegation: dotDelegResult.warning,
   obsidian_projects: obsidianResult.ok
     ? `Obsidian project frontmatter collected from 03_Active_Projects/. ${obsidianResult.projects.length} folder(s) found. Structured projects: ${obsidianResult.projects.filter(p => p.registry_status === 'registered').length}. Folder paths redacted. Body content not read.`
     : `Obsidian project adapter failed: ${obsidianResult.error}`,
@@ -951,9 +980,9 @@ const snapshot = {
       ),
       {
         id: 'db-snap-2',
-        type: 'next',
-        title: 'Phase 5 — hosted readiness complete; auth gate pending Raz',
-        body: 'P5.1-P5.4 complete (local export validation, frontend source boundary, Supabase/Vercel templates, fail-closed publisher bridge). P5.5 auth-gated hosted app waiting on Raz to confirm Supabase project + bucket details.',
+        type: 'info',
+        title: 'Phase 5 — live at warung-os-online.vercel.app (public, no-auth)',
+        body: 'GitHub warung-kerja/warung-os auto-deploys main to Vercel. Supabase snapshot publishing pipeline configured. Auth gate (P5.5) deferred — Raz chose public/no-auth for now.',
         time: 'Phase 5',
         project: 'warung-os',
       },
@@ -965,53 +994,8 @@ const snapshot = {
     items: projectItems,
     // TickTick Warung OS board — sanitized cache (task titles/columns/priorities; no descriptions or comments)
     kanban_boards: ticktickResult.boards,
-    // Static placeholder — live agent status adapter not yet connected.
-    team_members: [
-      {
-        id: 'baro',
-        name: 'Baro',
-        role: 'Orchestrator',
-        model: 'claude-sonnet-4-6',
-        agent_group: 'core',
-        parent_agent: null,
-        synced_at: nowISO,
-        status: 'active',
-        current_task: 'Phase 2 QA and handoff review',
-      },
-      {
-        id: 'mia',
-        name: 'Mia',
-        role: 'Tech Lead',
-        model: 'claude-sonnet-4-6',
-        agent_group: 'core',
-        parent_agent: 'baro',
-        synced_at: nowISO,
-        status: 'active',
-        current_task: 'Phase 2 Task 8 — QA and handoff',
-      },
-      {
-        id: 'gabs',
-        name: 'Gabs',
-        role: 'Art Director',
-        model: 'claude-sonnet-4-6',
-        agent_group: 'core',
-        parent_agent: 'baro',
-        synced_at: nowISO,
-        status: 'idle',
-        current_task: null,
-      },
-      {
-        id: 'obey',
-        name: 'Obey',
-        role: 'General Operator',
-        model: 'claude-sonnet-4-6',
-        agent_group: 'core',
-        parent_agent: 'baro',
-        synced_at: nowISO,
-        status: 'idle',
-        current_task: null,
-      },
-    ],
+    // Static placeholder via hermes-team-members.mjs — no live agent status source.
+    team_members: teamMembersResult.members,
   },
 
   operations: {
@@ -1067,7 +1051,7 @@ const snapshot = {
 
     hermes_model_health: modelHealth,
 
-    dot_delegation: [],
+    dot_delegation: dotDelegResult.items,
 
     // Phase 3: gateway connectivity and provider catalog
     gateway_status: gatewayStatus,
