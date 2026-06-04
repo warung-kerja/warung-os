@@ -1018,6 +1018,7 @@ const snapshot = {
     // Aggregate metadata only: no titles, prompts, content, or credential fields.
     session_activity_daily: sessionActivityResult.daily,
     session_activity_by_profile: sessionActivityResult.byProfile ?? [],
+    session_activity_hourly: sessionActivityResult.hourly ?? [],
 
     cron_jobs: cronJobs,
     source_health: sourceHealth,
@@ -1044,7 +1045,7 @@ const snapshot = {
             ? `ok (${toolUsageResult.daily.length} tool-day rows, ${toolUsageResult.profileCount} profile(s), ${toolUsageResult.rowCount} raw rows)`
             : 'no tool usage data found in messages table',
           session_activity_adapter: sessionActivityResult.daily.length > 0
-            ? `ok (${sessionActivityResult.daily.length} day-source rows, ${(sessionActivityResult.byProfile ?? []).length} profile summaries, ${sessionActivityResult.profileCount} profile(s), ${sessionActivityResult.rowCount} raw rows)`
+            ? `ok (${sessionActivityResult.daily.length} day-source rows, ${(sessionActivityResult.hourly ?? []).length} hourly buckets, ${(sessionActivityResult.byProfile ?? []).length} profile summaries, ${sessionActivityResult.profileCount} profile(s), ${sessionActivityResult.rowCount} raw rows)`
             : 'no session activity data found in sessions table',
           obsidian_projects_adapter: obsidianResult.ok ? `ok (${obsidianResult.projects.length} projects)` : `failed: ${obsidianResult.error}`,
           obsidian_wiki_adapter: wikiResult.ok ? `ok (${wikiResult.entries.length} entries)` : `failed: ${wikiResult.error}`,
@@ -1091,7 +1092,7 @@ console.log(`[warung-os] Projects in snapshot: ${projectItems.length}`)
 console.log(`[warung-os] TickTick board: ${ticktickResult.ok ? `ok  (${ticktickResult.boards.reduce((n, b) => n + b.task_count, 0)} task(s), cache ${ticktickResult.cache_age_hours}h old)` : `UNAVAIL: ${ticktickResult.error}`}`)
 console.log(`[warung-os] Token usage:    ${tokenResult.ok ? `ok  (${tokenResult.profileCount} profile(s), ${tokenResult.modelDaily.length} model-day, ${tokenResult.agentDaily.length} source-day rows)` : `UNAVAIL: ${tokenResult.error}`}`)
 console.log(`[warung-os] Tool usage:    ${toolUsageResult.daily.length > 0 ? `ok  (${toolUsageResult.daily.length} tool-day row(s), ${toolUsageResult.profileCount} profile(s), ${toolUsageResult.rowCount} raw rows)` : 'UNAVAIL: no tool usage data in messages table'}`)
-console.log(`[warung-os] Session activity: ${sessionActivityResult.daily.length > 0 ? `ok  (${sessionActivityResult.daily.length} day-source row(s), ${sessionActivityResult.profileCount} profile(s), ${sessionActivityResult.rowCount} raw rows, 30d)` : 'UNAVAIL: no session activity data'}`)
+console.log(`[warung-os] Session activity: ${sessionActivityResult.daily.length > 0 ? `ok  (${sessionActivityResult.daily.length} day-source row(s), ${(sessionActivityResult.hourly ?? []).length} hourly bucket(s), ${sessionActivityResult.profileCount} profile(s), ${sessionActivityResult.rowCount} raw rows, 30d)` : 'UNAVAIL: no session activity data'}`)
 console.log(`[warung-os] Duration:       ${durationMs}ms`)
 console.log(`[warung-os] Warnings:`)
 warnings.forEach(w => console.log(`  - ${w}`))

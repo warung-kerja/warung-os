@@ -25,6 +25,7 @@ import type {
   TickTickKanbanBoard,
   SessionActivityDaily,
   SessionActivityByProfile,
+  SessionActivityHourly,
 } from './warung-os'
 
 export type SourceMode = 'fixture' | 'snapshot'
@@ -79,6 +80,9 @@ export interface OperationsSnapshot {
   // Per-profile summary over the collection window.
   // Aggregate metadata only: no titles, prompts, content, or credential fields.
   session_activity_by_profile?: SessionActivityByProfile[]
+  // Hourly session distribution over the collection window (0–23 local hour buckets).
+  // Aggregate metadata only: no titles, prompts, content, or credential fields.
+  session_activity_hourly?: SessionActivityHourly[]
 }
 
 export interface WarungSnapshot {
@@ -140,6 +144,7 @@ export interface WarungData {
   // Agent activity feed
   sessionActivityDaily: SessionActivityDaily[]
   sessionActivityByProfile: SessionActivityByProfile[]
+  sessionActivityHourly: SessionActivityHourly[]
   // Wiki
   wiki: WikiEntry[]
 }

@@ -61,6 +61,7 @@ function buildFixtureData(): WarungData {
     providerCatalog: providerCatalogFixtures,
     sessionActivityDaily: [],
     sessionActivityByProfile: [],
+    sessionActivityHourly: [],
     wiki: wikiFixtures,
   }
 }
@@ -101,6 +102,7 @@ function snapshotToData(result: SnapshotLoadResult): WarungData {
     providerCatalog: operations.provider_catalog ?? [],
     sessionActivityDaily: operations.session_activity_daily ?? [],
     sessionActivityByProfile: operations.session_activity_by_profile ?? [],
+    sessionActivityHourly: operations.session_activity_hourly ?? [],
     wiki: wiki.entries,
   }
 }

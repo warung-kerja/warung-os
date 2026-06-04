@@ -272,6 +272,17 @@ export interface TickTickKanbanBoard {
   cache_age_hours: number | null
 }
 
+// Hourly session distribution over the collection window (30 days).
+// Aggregated by local hour-of-day (0–23) across all profiles and sources.
+// Privacy boundary: aggregate integer counts only — no content, titles, prompts, or secrets.
+export interface SessionActivityHourly {
+  hour: number            // 0-23, local time (strftime '%H')
+  session_count: number   // sessions that started in this hour, across the window
+  message_total: number
+  tool_call_total: number
+  total_tokens: number
+}
+
 // Per-profile session summary over the collection window (30 days).
 // Privacy boundary: aggregate integer counts only — no content, titles, prompts, or secrets.
 // Profile names are non-secret (they are folder names under ~/.hermes/profiles/).

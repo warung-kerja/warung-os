@@ -264,7 +264,7 @@ function OverviewTab({ data }: { data: WarungData }) {
 const SOURCE_COLORS: Record<string, string> = { cron: '', telegram: 'blue', cli: 'teal', acp: 'ok' }
 
 function UsageTab({ data }: { data: WarungData }) {
-  const { agentTokenDaily, modelTokenDaily, toolUsageDaily, sessionActivityDaily, sessionActivityByProfile } = data
+  const { agentTokenDaily, modelTokenDaily, toolUsageDaily, sessionActivityDaily, sessionActivityByProfile, sessionActivityHourly } = data
 
   const hasAgentData    = agentTokenDaily.length > 0
   const hasModelData    = modelTokenDaily.length > 0
@@ -473,7 +473,7 @@ function UsageTab({ data }: { data: WarungData }) {
         <div className="ops-section-label">Session activity · Hermes state.db · 14d</div>
         {!hasActivityData
           ? <div className="panel"><UnavailableNote label="session activity" /><p style={{ fontSize: 11, color: 'var(--muted)' }}>Session activity adapter not yet producing data — state.db may be absent.</p></div>
-          : <ActivityFeedPanel rows={sessionActivityDaily} byProfile={sessionActivityByProfile} latestDate={latestDate} />
+          : <ActivityFeedPanel rows={sessionActivityDaily} byProfile={sessionActivityByProfile} hourly={sessionActivityHourly} latestDate={latestDate} />
         }
       </div>
     </>
@@ -488,9 +488,53 @@ const ACTIVITY_SOURCE_COLORS: Record<string, string> = {
   tui: 'warn',
 }
 
-function ActivityFeedPanel({ rows, byProfile, latestDate }: {
+function HourHeatmap({ hourly }: { hourly: import('../types/warung-os').SessionActivityHourly[] }) {
+  const cells = Array.from({ length: 24 }, (_, h) => {
+    const entry = hourly.find(r => r.hour === h)
+    return { hour: h, session_count: entry?.session_count ?? 0 }
+  })
+  const maxCount = Math.max(...cells.map(c => c.session_count), 1)
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 2 }}>
+        {cells.map(c => (
+          <div
+            key={c.hour}
+            title={`${String(c.hour).padStart(2, '0')}:00 — ${c.session_count} session${c.session_count !== 1 ? 's' : ''}`}
+            style={{
+              flex: 1,
+              height: 28,
+              background: c.session_count === 0
+                ? 'rgba(241,116,80,0.06)'
+                : `rgba(241,116,80,${(0.15 + (c.session_count / maxCount) * 0.75).toFixed(2)})`,
+            }}
+          />
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 2, marginTop: 5 }}>
+        {cells.map(c => (
+          <div
+            key={c.hour}
+            style={{
+              flex: 1,
+              textAlign: 'center',
+              fontSize: 9,
+              color: 'var(--muted)',
+              fontFamily: 'var(--mono)',
+            }}
+          >
+            {[0, 6, 12, 18].includes(c.hour) ? String(c.hour).padStart(2, '0') : ''}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ActivityFeedPanel({ rows, byProfile, hourly, latestDate }: {
   rows: import('../types/warung-os').SessionActivityDaily[]
   byProfile: import('../types/warung-os').SessionActivityByProfile[]
+  hourly: import('../types/warung-os').SessionActivityHourly[]
   latestDate: string
 }) {
   const days14 = buildLast7Days(latestDate + 'T12:00:00Z', 14)
@@ -601,6 +645,16 @@ function ActivityFeedPanel({ rows, byProfile, latestDate }: {
                 </tbody>
               </table>
             </div>
+          </div>
+        </>
+      )}
+
+      {hourly.length > 0 && (
+        <>
+          <div className="gap-sm" />
+          <div className="panel">
+            <div className="mono" style={{ marginBottom: 12 }}>Sessions by hour of day · 30d window · local time</div>
+            <HourHeatmap hourly={hourly} />
           </div>
         </>
       )}

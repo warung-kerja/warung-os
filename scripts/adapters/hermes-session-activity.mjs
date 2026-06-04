@@ -57,6 +57,23 @@ function safeId(value) {
     .replace(/^-|-$/g, '') || 'unknown'
 }
 
+// ---- Safe hourly distribution query ----
+// Groups by local hour-of-day (0-23) over the last 30 days.
+// Reads only: started_at, message_count, tool_call_count, input_tokens, output_tokens.
+// NEVER reads: title, system_prompt, model_config, handoff_state, billing_*, cost_*, user_id.
+const HOURLY_QUERY = [
+  'SELECT',
+  '  CAST(strftime(\'%H\', started_at, \'unixepoch\', \'localtime\') AS INTEGER) AS hour,',
+  '  COUNT(*) AS session_count,',
+  '  COALESCE(SUM(message_count), 0) AS message_total,',
+  '  COALESCE(SUM(tool_call_count), 0) AS tool_call_total,',
+  '  COALESCE(SUM(input_tokens), 0) + COALESCE(SUM(output_tokens), 0) AS total_tokens',
+  'FROM sessions',
+  "WHERE started_at >= unixepoch('now', '-30 days')",
+  'GROUP BY hour',
+  'ORDER BY hour ASC',
+].join(' ')
+
 // ---- Safe SQL query ----
 // Groups by (day, source, model) to allow picking primary_model per day/source.
 // Reads only: started_at, ended_at, source, model, message_count, tool_call_count,
@@ -94,6 +111,20 @@ function queryProfile(dbPath) {
   }
 }
 
+function queryProfileHourly(dbPath) {
+  try {
+    const raw = execSync(`"${SQLITE3}" -readonly -json "${dbPath}"`, {
+      input: HOURLY_QUERY,
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 10000,
+    })
+    return JSON.parse(raw || '[]')
+  } catch (_) {
+    return []
+  }
+}
+
 /**
  * Collect Hermes session activity from the sessions table across all profiles.
  * Groups by (day, source) and aggregates session_count, message_total,
@@ -103,16 +134,19 @@ function queryProfile(dbPath) {
  * @param {string} nowISO — ISO timestamp for synced_at fields
  * @returns {{
  *   daily: import('../../src/types/warung-os.js').SessionActivityDaily[],
+ *   byProfile: import('../../src/types/warung-os.js').SessionActivityByProfile[],
+ *   hourly: import('../../src/types/warung-os.js').SessionActivityHourly[],
  *   profileCount: number,
  *   rowCount: number
  * }}
  */
 export function collectSessionActivity(profiles, nowISO) {
   if (!existsSync(SQLITE3)) {
-    return { daily: [], profileCount: 0, rowCount: 0 }
+    return { daily: [], byProfile: [], hourly: [], profileCount: 0, rowCount: 0 }
   }
 
   const allRawRows = []
+  const allHourlyRaw = []  // per-profile hourly rows before merging
   let profileCount = 0
 
   for (const profile of profiles) {
@@ -121,6 +155,8 @@ export function collectSessionActivity(profiles, nowISO) {
     profileCount++
     const rows = queryProfile(dbPath)
     for (const row of rows) allRawRows.push({ ...row, profile: profile.name })
+    const hourlyRows = queryProfileHourly(dbPath)
+    for (const row of hourlyRows) allHourlyRaw.push(row)
   }
 
   // Aggregate raw (day, source, model) rows into (day, source) map.
@@ -243,7 +279,22 @@ export function collectSessionActivity(profiles, nowISO) {
     }
   }).sort((a, b) => b.session_count - a.session_count)
 
-  return { daily, byProfile, profileCount, rowCount: allRawRows.length }
+  // ---- Hourly distribution ----
+  // Merge hourly rows from all profiles by summing session_count per hour (0-23).
+  const hourlyMap = {}
+  for (const row of allHourlyRaw) {
+    const h = Number(row.hour ?? 0)
+    if (!hourlyMap[h]) {
+      hourlyMap[h] = { hour: h, session_count: 0, message_total: 0, tool_call_total: 0, total_tokens: 0 }
+    }
+    hourlyMap[h].session_count   += (row.session_count   ?? 0)
+    hourlyMap[h].message_total   += (row.message_total   ?? 0)
+    hourlyMap[h].tool_call_total += (row.tool_call_total ?? 0)
+    hourlyMap[h].total_tokens    += (row.total_tokens    ?? 0)
+  }
+  const hourly = Object.values(hourlyMap).sort((a, b) => a.hour - b.hour)
+
+  return { daily, byProfile, hourly, profileCount, rowCount: allRawRows.length }
 }
 
 // ---- Standalone execution ----
@@ -271,6 +322,6 @@ if (process.argv[1] === __filename) {
 
   console.log(JSON.stringify(result.daily, null, 2))
   process.stderr.write(
-    `[hermes-session-activity] ${result.daily.length} day-source row(s) from ${result.profileCount} profile(s) (${result.rowCount} raw query rows)\n`
+    `[hermes-session-activity] ${result.daily.length} day-source row(s), ${result.hourly.length} hourly bucket(s) from ${result.profileCount} profile(s) (${result.rowCount} raw query rows)\n`
   )
 }
