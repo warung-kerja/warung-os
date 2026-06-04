@@ -1,8 +1,8 @@
 # Warung OS — Phase 5 Hosted Mirror Plan
 
-**Status:** Active — Raz approved hosted-mirror prep beyond local export
+**Status:** Frozen / parked — Raz froze Phase 5 on 2026-06-05
 **Opened:** 2026-06-02
-**Approval:** Raz approved continuing Phase 5 on 2026-06-02; live upload/deploy still requires local credentials and explicit command execution.
+**Approval:** Raz approved continuing Phase 5 on 2026-06-02, then froze Phase 5 on 2026-06-05 to move back to the core product MVP. Live upload/deploy/auth work remains parked until Raz explicitly reopens it.
 **Owner:** Raz
 **Tech lead:** Mia  
 **Scope rule:** Build hosted-mirror readiness now, but keep it fail-closed: no credentials committed, no service-role key in browser/Vercel, no paid services, and no upload unless the local publisher is explicitly run with real `.env.publish` credentials.
@@ -11,11 +11,11 @@
 
 ## In layman terms
 
-Warung OS can stay safe on the Mac while we prepare the package that a hosted version would read later. This phase starts by making a clean, checked export file — not by putting anything online yet.
+Phase 5 has done enough for now: Warung OS has a live simple public mirror and a safe snapshot/export boundary for later. We are parking auth/private-hosting work and shifting effort back to making the dashboard more useful day to day.
 
 ## Phase goal
 
-Create an auth-gated hosted snapshot mirror path for Warung OS so Raz can eventually access the dashboard from other computers without exposing the local workstation, local filesystem, secrets, raw transcripts, or arbitrary command execution.
+Park the hosted/auth path after completing fail-closed readiness. Preserve the current live public/no-auth mirror and snapshot/export architecture so Phase 5 can restart later without exposing the local workstation, local filesystem, secrets, raw transcripts, or arbitrary command execution.
 
 ## Architecture direction
 
@@ -102,7 +102,7 @@ Deliverables:
 
 ### P5.5 — Auth-gated hosted app
 
-**Status:** Not started / deployment gated
+**Status:** Frozen / not next
 
 Deliverables:
 
@@ -127,6 +127,6 @@ P5.1 through P5.4 are implemented as safe, fail-closed local readiness work:
 - `npm run hosted:publish -- --upload` is the only command that can upload, and it requires real local `.env.publish` credentials.
 - The frontend can now distinguish local/prepared/remote data sources plus unavailable/auth/stale states.
 
-Next true product step is P5.5: implement the actual Supabase Auth wall and hosted deployment target after Raz provides/chooses the project/account/domain.
+Next true product step is **not** P5.5. Raz froze Phase 5 on 2026-06-05. Resume P5.5 only if Raz explicitly asks for private/auth-gated hosting later. Current active work is the core product MVP: Morning Brief usefulness, project source-of-truth, Active Projects coverage, Gabs visual polish, and safe live team/delegation sources.
 
 <!-- authored by Mia, 2026-06-02 -->

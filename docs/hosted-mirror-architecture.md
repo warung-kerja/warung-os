@@ -1,14 +1,12 @@
 # Warung OS — Auth-Gated Hosted Mirror Architecture
 
-**Status:** Phase 5 active — P5.1-P5.4 readiness implemented fail-closed. Vercel deployment is live (public, no-auth). P5.5 auth-gate deferred — Raz chose public/no-auth for now.
+**Status:** Phase 5 frozen / parked as of 2026-06-05. P5.1-P5.4 readiness is implemented fail-closed and Vercel deployment is live (public, no-auth), but hosted/auth work is no longer active.
 **Owner:** Mia (tech lead), Raz (approval required before live deployment/account changes)
-**Date:** 2026-06-01; reopened 2026-06-02; updated 2026-06-03 (auth gate deferred)
+**Date:** 2026-06-01; reopened 2026-06-02; updated 2026-06-03 (auth gate deferred); frozen 2026-06-05
 **Implements:** CLAUDE.md § Remote access direction; Epic Phase 5 — Hosted mirror
 
-> **Note (2026-06-03):** Warung OS is now live at `warung-os-online.vercel.app` (public, no-auth).
-> P5.5 auth-gate is **deferred** — this document describes the auth-gated architecture for
-> future reference if Raz decides to add auth later. Steps 5–9 in the implementation sequence
-> below are not currently planned. The Supabase publishing pipeline (steps 1–4) is active.
+> **Note (2026-06-05):** Warung OS is live at `warung-os-online.vercel.app` (public, no-auth), and Raz froze Phase 5 for now.
+> This document is retained as a future architecture reference only. Do not continue auth, Supabase, Vercel, deployment, or publisher work unless Raz explicitly reopens Phase 5. Current active work has moved back to the core product MVP.
 
 ---
 

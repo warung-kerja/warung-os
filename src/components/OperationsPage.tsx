@@ -853,10 +853,18 @@ function SourceHealthDetailPanel({ rows }: { rows: SourceHealthSnapshot[] }) {
   )
 }
 
+type SourceFilter = 'all' | 'issues' | 'ok'
+
 function SourcesTab({ data }: { data: WarungData }) {
   const { sourceHealth, syncRuns } = data
   const { localSyncRequests, requestManualRefresh } = useLocalState()
   const syncRequests = [...localSyncRequests, ...data.syncRequests]
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
+  const filteredRows = sourceFilter === 'all'
+    ? sourceHealth
+    : sourceFilter === 'issues'
+      ? sourceHealth.filter(r => r.status === 'warn' || r.status === 'bad')
+      : sourceHealth.filter(r => r.status === 'ok')
   return (
     <>
       <div className="ops-section">
@@ -866,6 +874,19 @@ function SourcesTab({ data }: { data: WarungData }) {
           : <>
               <SourceHealthDetailPanel rows={sourceHealth} />
               <div className="gap-sm" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <span className="cell-muted" style={{ fontSize: 10, marginRight: 4 }}>Filter:</span>
+                {(['all', 'issues', 'ok'] as SourceFilter[]).map(f => (
+                  <button
+                    key={f}
+                    className={`btn btn--sm${sourceFilter === f ? '' : ' btn--ghost'}`}
+                    style={sourceFilter === f ? { borderColor: 'var(--signal)', color: 'var(--signal)' } : {}}
+                    onClick={() => setSourceFilter(f)}
+                  >
+                    {f === 'all' ? `all · ${sourceHealth.length}` : f === 'issues' ? `warn+bad · ${sourceHealth.filter(r => r.status === 'warn' || r.status === 'bad').length}` : `ok · ${sourceHealth.filter(r => r.status === 'ok').length}`}
+                  </button>
+                ))}
+              </div>
               <div className="table-wrap">
                 <table className="data-table" style={{ width: '100%' }}>
                   <thead>
@@ -880,7 +901,9 @@ function SourcesTab({ data }: { data: WarungData }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {sourceHealth.map(sh => (
+                    {filteredRows.length === 0
+                      ? <tr><td colSpan={7} className="cell-muted" style={{ textAlign: 'center', padding: '12px 0' }}>No rows match filter.</td></tr>
+                      : filteredRows.map(sh => (
                       <tr key={sh.id}>
                         <td className="cell-strong">{sh.label}</td>
                         <td className="cell-muted">{sh.source_type}</td>

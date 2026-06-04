@@ -73,7 +73,7 @@ Deliverables:
 
 ## Phase 5 — Hosted mirror
 
-Status: Active — P5.1-P5.4 fail-closed hosted readiness completed 2026-06-02 after Raz approved continuing Phase 5. Plan: `docs/phase-5-hosted-mirror-plan.md`.
+Status: Frozen / parked as of 2026-06-05. P5.1-P5.4 fail-closed hosted readiness is complete and the public/no-auth Vercel mirror remains live, but Raz asked to stop Phase 5 work for now and move back to the core product MVP. Plan archive: `docs/phase-5-hosted-mirror-plan.md`.
 
 Completed readiness slices:
 
@@ -82,12 +82,25 @@ Completed readiness slices:
 - P5.3 Supabase/Vercel config templates with no real credentials.
 - P5.4 local publisher bridge that defaults to dry-run and requires `.env.publish` + `--upload` for any real upload.
 
-Deliverables:
+Frozen boundary:
 
-- Secure hosted snapshot mirror, likely Mission Control Online-style Supabase/Vercel pattern.
-- Auth and RLS.
-- Local bridge only writes curated snapshots.
-- Local hosted export package with safety manifest before any upload/deployment.
+- Keep the current public/no-auth hosted mirror live.
+- Keep the snapshot/export/publisher path fail-closed and documented for later.
+- Do not continue auth/RLS, private deployment, Supabase, Vercel, or publisher work unless Raz explicitly reopens Phase 5.
+- Local bridge only writes curated snapshots and must not expose service-role keys to frontend/Vercel.
+
+
+## Active post-Phase-5 plan — Core product MVP
+
+Status: Active after Raz froze Phase 5 on 2026-06-05.
+
+Priority order:
+
+1. **Morning Brief MVP** — make Home genuinely useful: last-24h recap, blockers, moved projects, approvals, system concerns, and suggested focus.
+2. **Project source-of-truth** — decide and document whether Obsidian, TickTick, Warung OS snapshot data, or a future DB owns each project-status field.
+3. **Active Projects coverage** — add structured frontmatter/metadata to the wider Obsidian project set and keep TickTick board data as execution signal.
+4. **Gabs visual polish** — refine Mission Control-inspired visual system after functional flows are stable.
+5. **Safe team/delegation sources** — replace static team/Dot placeholders only when a safe Hermes live source exists.
 
 ## Risks / constraints
 
