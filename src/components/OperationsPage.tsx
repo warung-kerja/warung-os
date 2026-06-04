@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { WarungData } from '../types/snapshot'
-import type { AuditLogEntry } from '../types/warung-os'
+import type { AuditLogEntry, SourceHealthSnapshot } from '../types/warung-os'
 import { useWarungData } from '../data/dataSource'
 import { useLocalState } from '../data/localState'
 
@@ -810,6 +810,49 @@ function AutomationTab({ data }: { data: WarungData }) {
   )
 }
 
+function SourceHealthDetailPanel({ rows }: { rows: SourceHealthSnapshot[] }) {
+  const bad   = rows.filter(r => r.status === 'bad')
+  const warn  = rows.filter(r => r.status === 'warn')
+  const ok    = rows.filter(r => r.status === 'ok')
+  const issues = [...bad, ...warn]
+  return (
+    <div className="grid grid--2" style={{ marginBottom: 1 }}>
+      <div className="panel">
+        <div className="mono" style={{ marginBottom: 10 }}>Status summary · {rows.length} sources</div>
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+          {bad.length  > 0 && <span className="tag tag--bad">{bad.length} bad</span>}
+          {warn.length > 0 && <span className="tag tag--warn">{warn.length} warn</span>}
+          <span className="tag tag--ok">{ok.length} ok</span>
+        </div>
+        {issues.length === 0 && (
+          <p style={{ marginTop: 10, fontSize: 11, color: 'var(--ok)' }}>All sources reachable.</p>
+        )}
+      </div>
+      <div className="panel panel--alt">
+        <div className="mono" style={{ marginBottom: 10 }}>
+          {issues.length > 0 ? `Unavailable / warn · ${issues.length}` : 'No issues'}
+        </div>
+        {issues.length === 0
+          ? <p style={{ fontSize: 11, color: 'var(--muted)' }}>No unavailable or warning sources.</p>
+          : issues.map(sh => (
+              <div key={sh.id} style={{ borderTop: '1px solid var(--line)', padding: '6px 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{ fontSize: 11, color: 'var(--soft)' }}>{sh.label}</span>
+                  <span className={`tag ${sh.status === 'bad' ? 'tag--bad' : 'tag--warn'}`} style={{ flexShrink: 0 }}>
+                    {sh.status}
+                  </span>
+                </div>
+                {sh.error && (
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, lineHeight: 1.4 }}>{sh.error}</div>
+                )}
+              </div>
+            ))
+        }
+      </div>
+    </div>
+  )
+}
+
 function SourcesTab({ data }: { data: WarungData }) {
   const { sourceHealth, syncRuns } = data
   const { localSyncRequests, requestManualRefresh } = useLocalState()
@@ -820,41 +863,45 @@ function SourcesTab({ data }: { data: WarungData }) {
         <div className="ops-section-label">Source health / freshness</div>
         {sourceHealth.length === 0
           ? <div className="panel"><UnavailableNote label="source health" /></div>
-          : <div className="table-wrap">
-              <table className="data-table" style={{ width: '100%' }}>
-                <thead>
-                  <tr>
-                    <th>Source</th>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th>Modified</th>
-                    <th>Age</th>
-                    <th>Readable</th>
-                    <th>Error</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sourceHealth.map(sh => (
-                    <tr key={sh.id}>
-                      <td className="cell-strong">{sh.label}</td>
-                      <td className="cell-muted">{sh.source_type}</td>
-                      <td>
-                        {sh.status === 'ok'
-                          ? <span className="cell-ok">ok</span>
-                          : sh.status === 'warn'
-                            ? <span className="cell-warn">warn</span>
-                            : <span className="cell-bad">bad</span>
-                        }
-                      </td>
-                      <td className="cell-mono">{sh.modified_at ? fmtTime(sh.modified_at) : '—'}</td>
-                      <td className="cell-mono">{sh.age_hours != null ? `${sh.age_hours.toFixed(1)}h` : '—'}</td>
-                      <td className={sh.readable ? 'cell-ok' : 'cell-bad'}>{sh.readable ? 'yes' : 'no'}</td>
-                      <td className="cell-muted" style={{ fontSize: 10 }}>{sh.error ?? '—'}</td>
+          : <>
+              <SourceHealthDetailPanel rows={sourceHealth} />
+              <div className="gap-sm" />
+              <div className="table-wrap">
+                <table className="data-table" style={{ width: '100%' }}>
+                  <thead>
+                    <tr>
+                      <th>Source</th>
+                      <th>Type</th>
+                      <th>Status</th>
+                      <th>Modified</th>
+                      <th>Age</th>
+                      <th>Readable</th>
+                      <th>Error</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {sourceHealth.map(sh => (
+                      <tr key={sh.id}>
+                        <td className="cell-strong">{sh.label}</td>
+                        <td className="cell-muted">{sh.source_type}</td>
+                        <td>
+                          {sh.status === 'ok'
+                            ? <span className="cell-ok">ok</span>
+                            : sh.status === 'warn'
+                              ? <span className="cell-warn">warn</span>
+                              : <span className="cell-bad">bad</span>
+                          }
+                        </td>
+                        <td className="cell-mono">{sh.modified_at ? fmtTime(sh.modified_at) : '—'}</td>
+                        <td className="cell-mono">{sh.age_hours != null ? `${sh.age_hours.toFixed(1)}h` : '—'}</td>
+                        <td className={sh.readable ? 'cell-ok' : 'cell-bad'}>{sh.readable ? 'yes' : 'no'}</td>
+                        <td className="cell-muted" style={{ fontSize: 10 }}>{sh.error ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
         }
       </div>
 
