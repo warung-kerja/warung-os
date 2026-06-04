@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useWarungData } from '../data/dataSource'
 import { useLocalState } from '../data/localState'
-import type { CanonicalProject, CanonicalTeamMember, ApprovalItem, TickTickKanbanBoard } from '../types/warung-os'
+import type { CanonicalProject, CanonicalTeamMember, ApprovalItem, TickTickKanbanBoard, TickTickTask } from '../types/warung-os'
 
 function statusTag(status: string | null): JSX.Element {
   switch (status) {
@@ -33,7 +33,21 @@ function fmtDate(iso: string | null): string {
 
 const ACTIVE_COLUMNS = new Set(['in build', 'build ready', 'qa / review', 'qa/review', 'in progress', 'in review'])
 
+function ttPriorityTag(priority: TickTickTask['priority']): JSX.Element | null {
+  if (!priority || priority === 'none') return null
+  const label = priority === 'high' ? 'High' : priority === 'medium' ? 'Med' : priority === 'low' ? 'Low' : priority
+  const cls = priority === 'high' ? 'tag--signal' : priority === 'medium' ? 'tag--blue' : ''
+  return <span className={`tag ${cls}`} style={{ fontSize: 10 }}>{label}</span>
+}
+
+function ttStatusTag(status: TickTickTask['status']): JSX.Element {
+  const label = status === 2 ? 'Done' : status === -1 ? 'Archived' : status === 0 ? 'Open' : 'Unknown'
+  const cls = status === 2 ? 'tag--ok' : status === -1 ? 'tag--warn' : ''
+  return <span className={`tag ${cls}`} style={{ fontSize: 10 }}>{label}</span>
+}
+
 function KanbanBoardPanel({ board }: { board: TickTickKanbanBoard }) {
+  const [showTasks, setShowTasks] = useState(true)
   const maxCount = Math.max(...board.column_counts.map(c => c.count), 1)
   const cacheLabel = board.cache_age_hours != null
     ? `${board.cache_age_hours.toFixed(1)}h ago`
@@ -41,6 +55,15 @@ function KanbanBoardPanel({ board }: { board: TickTickKanbanBoard }) {
   const collectedLabel = board.collected_at
     ? new Date(board.collected_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
     : '—'
+
+  // Group tasks by column, preserving column_counts order
+  const tasksByColumn = board.column_counts
+    .map(({ column }) => ({
+      column,
+      isActive: ACTIVE_COLUMNS.has(column.toLowerCase()),
+      tasks: (board.tasks ?? []).filter(t => t.column === column),
+    }))
+    .filter(g => g.tasks.length > 0)
 
   return (
     <div className="panel" style={{ marginTop: 1 }}>
@@ -67,6 +90,53 @@ function KanbanBoardPanel({ board }: { board: TickTickKanbanBoard }) {
           )
         })}
       </div>
+
+      {tasksByColumn.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div className="mono">Tasks · {board.task_count}</div>
+            <button
+              className="btn btn--ghost"
+              style={{ fontSize: 10, padding: '2px 8px' }}
+              onClick={() => setShowTasks(v => !v)}
+            >
+              {showTasks ? 'Hide' : 'Show'}
+            </button>
+          </div>
+
+          {showTasks && (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {tasksByColumn.map(({ column, isActive, tasks }) => (
+                <div key={column}>
+                  <div className="mono" style={{ fontSize: 10, color: isActive ? 'var(--signal)' : 'var(--muted)', marginBottom: 4 }}>
+                    {column} · {tasks.length}
+                  </div>
+                  <div>
+                    {tasks.map(task => (
+                      <div
+                        key={task.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          padding: '5px 0',
+                          borderBottom: '1px solid var(--line)',
+                        }}
+                      >
+                        <span style={{ flex: 1, fontSize: 12, color: isActive ? 'var(--fg)' : 'var(--soft)', lineHeight: 1.3 }}>
+                          {task.title}
+                        </span>
+                        {ttStatusTag(task.status)}
+                        {ttPriorityTag(task.priority)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mono" style={{ marginTop: 12, color: 'var(--muted)', fontSize: 10 }}>
         Collected {collectedLabel} · {cacheLabel} · read-only cache · no descriptions or comments
