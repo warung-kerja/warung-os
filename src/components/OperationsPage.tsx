@@ -372,6 +372,57 @@ function UsageTab({ data }: { data: WarungData }) {
 
       <div className="gap-sm" />
 
+      {sessionActivityByProfile.length > 0 && (() => {
+        const profileTokenMax = Math.max(...sessionActivityByProfile.map(p => p.total_tokens), 1)
+        return (
+          <>
+            <div className="ops-section">
+              <div className="ops-section-label">Token usage by profile · 30d window · Hermes state.db</div>
+              <div className="grid grid--2">
+                <div className="panel">
+                  <div className="mono" style={{ marginBottom: 10 }}>Tokens · 30d — by profile</div>
+                  {sessionActivityByProfile.map(p => (
+                    <HBarRow
+                      key={p.profile}
+                      label={p.profile}
+                      value={p.total_tokens}
+                      max={profileTokenMax}
+                      colorClass="blue"
+                    />
+                  ))}
+                </div>
+                <div className="panel panel--alt">
+                  <div className="mono" style={{ marginBottom: 10 }}>Profile details · 30d</div>
+                  <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--line)' }}>
+                        <th style={{ textAlign: 'left', color: 'var(--muted)', fontWeight: 'normal', padding: '0 8px 6px 0', fontFamily: 'var(--mono)', fontSize: 10 }}>Profile</th>
+                        <th style={{ textAlign: 'right', color: 'var(--muted)', fontWeight: 'normal', padding: '0 0 6px 8px', fontFamily: 'var(--mono)', fontSize: 10 }}>Tokens (30d)</th>
+                        <th style={{ textAlign: 'right', color: 'var(--muted)', fontWeight: 'normal', padding: '0 0 6px 8px', fontFamily: 'var(--mono)', fontSize: 10 }}>Sessions</th>
+                        <th style={{ textAlign: 'right', color: 'var(--muted)', fontWeight: 'normal', padding: '0 0 6px 8px', fontFamily: 'var(--mono)', fontSize: 10 }}>Avg tok/session</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sessionActivityByProfile.map(p => (
+                        <tr key={p.profile} style={{ borderTop: '1px solid var(--line)' }}>
+                          <td style={{ padding: '5px 8px 5px 0', color: 'var(--fg)', fontFamily: 'var(--mono)', fontSize: 10 }}>{p.profile}</td>
+                          <td style={{ padding: '5px 0 5px 8px', textAlign: 'right', color: 'var(--soft)', fontFamily: 'var(--mono)', fontSize: 10 }}>{fmtTokens(p.total_tokens)}</td>
+                          <td style={{ padding: '5px 0 5px 8px', textAlign: 'right', color: 'var(--muted)', fontFamily: 'var(--mono)', fontSize: 10 }}>{p.session_count}</td>
+                          <td style={{ padding: '5px 0 5px 8px', textAlign: 'right', color: 'var(--muted)', fontFamily: 'var(--mono)', fontSize: 10 }}>
+                            {p.session_count > 0 ? fmtTokens(Math.round(p.total_tokens / p.session_count)) : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div className="gap-sm" />
+          </>
+        )
+      })()}
+
       <div className="ops-section">
         <div className="ops-section-label">Tool usage daily · {latestDate}</div>
         {!hasToolData
