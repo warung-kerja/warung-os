@@ -272,6 +272,24 @@ export interface TickTickKanbanBoard {
   cache_age_hours: number | null
 }
 
+// Per-profile session summary over the collection window (30 days).
+// Privacy boundary: aggregate integer counts only — no content, titles, prompts, or secrets.
+// Profile names are non-secret (they are folder names under ~/.hermes/profiles/).
+export interface SessionActivityByProfile {
+  id: string
+  profile: string               // Hermes profile name (e.g. 'tech-director', 'default')
+  session_count: number         // total sessions in window
+  message_total: number
+  tool_call_total: number
+  total_tokens: number
+  primary_source: string | null  // source with the highest session count
+  primary_model: string | null   // model with the highest session count
+  active_days: number            // distinct calendar days with at least one session
+  first_active_day: string | null
+  last_active_day: string | null
+  synced_at: string
+}
+
 // Agent activity feed — per (day, source) session aggregate from Hermes state.db.
 // Privacy boundary: aggregate metadata only — no titles, prompts, content, or secrets.
 export interface SessionActivityDaily {

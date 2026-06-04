@@ -29,10 +29,15 @@
  *   or does not have a compatible sessions table schema.
  * - Never fabricates session activity data.
  *
- * Exports:
- *   collectSessionActivity(profiles, nowISO) → { daily, profileCount, rowCount }
+ * ALSO EXPORTS:
+ *   collectSessionActivity(profiles, nowISO) →
+ *     { daily, byProfile, profileCount, rowCount }
  *
- * Output shape matches src/types/warung-os.ts#SessionActivityDaily.
+ * daily:     Array<SessionActivityDaily> — per (day, source) aggregate, 30-day window.
+ * byProfile: Array<SessionActivityByProfile> — per-profile summary over the window.
+ *
+ * Both output shapes match src/types/warung-os.ts.
+ * Privacy boundary: aggregate integer counts only — no content, titles, prompts, secrets.
  */
 
 import { existsSync, readdirSync } from 'fs'
@@ -184,7 +189,61 @@ export function collectSessionActivity(profiles, nowISO) {
     }
   }).sort((a, b) => b.date.localeCompare(a.date) || a.source.localeCompare(b.source))
 
-  return { daily, profileCount, rowCount: allRawRows.length }
+  // ---- Per-profile summary ----
+  // Aggregate raw rows by profile for the full window.
+  // Safety: reads only profile (folder name), aggregate integer counts, model string.
+  const profileMap = {}
+  for (const row of allRawRows) {
+    const p = row.profile ?? 'unknown'
+    if (!profileMap[p]) {
+      profileMap[p] = {
+        profile: p,
+        session_count: 0,
+        message_total: 0,
+        tool_call_total: 0,
+        total_tokens: 0,
+        sources: {},    // source → session_count
+        models: {},     // model  → session_count
+        days: new Set(),
+      }
+    }
+    const pe = profileMap[p]
+    const sc = row.session_count ?? 0
+    pe.session_count   += sc
+    pe.message_total   += (row.message_total   ?? 0)
+    pe.tool_call_total += (row.tool_call_total ?? 0)
+    pe.total_tokens    += (row.total_tokens    ?? 0)
+    const src = row.source ?? 'unknown'
+    pe.sources[src] = (pe.sources[src] ?? 0) + sc
+    const model = row.model ?? 'unknown'
+    pe.models[model] = (pe.models[model] ?? 0) + sc
+    if (row.day) pe.days.add(row.day)
+  }
+
+  const byProfile = Object.values(profileMap).map(pe => {
+    const primarySourceEntry = Object.entries(pe.sources)
+      .sort((a, b) => b[1] - a[1])[0]
+    const primaryModelEntry = Object.entries(pe.models)
+      .filter(([m]) => m !== 'unknown')
+      .sort((a, b) => b[1] - a[1])[0]
+    const sortedDays = [...pe.days].sort()
+    return {
+      id: `sapf-${safeId(pe.profile)}`,
+      profile: pe.profile,
+      session_count: pe.session_count,
+      message_total: pe.message_total,
+      tool_call_total: pe.tool_call_total,
+      total_tokens: pe.total_tokens,
+      primary_source: primarySourceEntry?.[0] ?? null,
+      primary_model: primaryModelEntry?.[0] ?? null,
+      active_days: pe.days.size,
+      first_active_day: sortedDays[0] ?? null,
+      last_active_day: sortedDays[sortedDays.length - 1] ?? null,
+      synced_at: nowISO,
+    }
+  }).sort((a, b) => b.session_count - a.session_count)
+
+  return { daily, byProfile, profileCount, rowCount: allRawRows.length }
 }
 
 // ---- Standalone execution ----

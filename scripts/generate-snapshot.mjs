@@ -1017,6 +1017,7 @@ const snapshot = {
     // Session activity feed — per (day, source) aggregate from sessions table, 30-day window.
     // Aggregate metadata only: no titles, prompts, content, or credential fields.
     session_activity_daily: sessionActivityResult.daily,
+    session_activity_by_profile: sessionActivityResult.byProfile ?? [],
 
     cron_jobs: cronJobs,
     source_health: sourceHealth,
@@ -1043,7 +1044,7 @@ const snapshot = {
             ? `ok (${toolUsageResult.daily.length} tool-day rows, ${toolUsageResult.profileCount} profile(s), ${toolUsageResult.rowCount} raw rows)`
             : 'no tool usage data found in messages table',
           session_activity_adapter: sessionActivityResult.daily.length > 0
-            ? `ok (${sessionActivityResult.daily.length} day-source rows, ${sessionActivityResult.profileCount} profile(s), ${sessionActivityResult.rowCount} raw rows)`
+            ? `ok (${sessionActivityResult.daily.length} day-source rows, ${(sessionActivityResult.byProfile ?? []).length} profile summaries, ${sessionActivityResult.profileCount} profile(s), ${sessionActivityResult.rowCount} raw rows)`
             : 'no session activity data found in sessions table',
           obsidian_projects_adapter: obsidianResult.ok ? `ok (${obsidianResult.projects.length} projects)` : `failed: ${obsidianResult.error}`,
           obsidian_wiki_adapter: wikiResult.ok ? `ok (${wikiResult.entries.length} entries)` : `failed: ${wikiResult.error}`,

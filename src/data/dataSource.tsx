@@ -60,6 +60,7 @@ function buildFixtureData(): WarungData {
     gatewayStatus: gatewayStatusFixtures,
     providerCatalog: providerCatalogFixtures,
     sessionActivityDaily: [],
+    sessionActivityByProfile: [],
     wiki: wikiFixtures,
   }
 }
@@ -99,6 +100,7 @@ function snapshotToData(result: SnapshotLoadResult): WarungData {
     gatewayStatus: operations.gateway_status ?? [],
     providerCatalog: operations.provider_catalog ?? [],
     sessionActivityDaily: operations.session_activity_daily ?? [],
+    sessionActivityByProfile: operations.session_activity_by_profile ?? [],
     wiki: wiki.entries,
   }
 }

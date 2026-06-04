@@ -264,7 +264,7 @@ function OverviewTab({ data }: { data: WarungData }) {
 const SOURCE_COLORS: Record<string, string> = { cron: '', telegram: 'blue', cli: 'teal', acp: 'ok' }
 
 function UsageTab({ data }: { data: WarungData }) {
-  const { agentTokenDaily, modelTokenDaily, toolUsageDaily, sessionActivityDaily } = data
+  const { agentTokenDaily, modelTokenDaily, toolUsageDaily, sessionActivityDaily, sessionActivityByProfile } = data
 
   const hasAgentData    = agentTokenDaily.length > 0
   const hasModelData    = modelTokenDaily.length > 0
@@ -422,7 +422,7 @@ function UsageTab({ data }: { data: WarungData }) {
         <div className="ops-section-label">Session activity · Hermes state.db · 14d</div>
         {!hasActivityData
           ? <div className="panel"><UnavailableNote label="session activity" /><p style={{ fontSize: 11, color: 'var(--muted)' }}>Session activity adapter not yet producing data — state.db may be absent.</p></div>
-          : <ActivityFeedPanel rows={sessionActivityDaily} latestDate={latestDate} />
+          : <ActivityFeedPanel rows={sessionActivityDaily} byProfile={sessionActivityByProfile} latestDate={latestDate} />
         }
       </div>
     </>
@@ -437,7 +437,11 @@ const ACTIVITY_SOURCE_COLORS: Record<string, string> = {
   tui: 'warn',
 }
 
-function ActivityFeedPanel({ rows, latestDate }: { rows: import('../types/warung-os').SessionActivityDaily[]; latestDate: string }) {
+function ActivityFeedPanel({ rows, byProfile, latestDate }: {
+  rows: import('../types/warung-os').SessionActivityDaily[]
+  byProfile: import('../types/warung-os').SessionActivityByProfile[]
+  latestDate: string
+}) {
   const days14 = buildLast7Days(latestDate + 'T12:00:00Z', 14)
   const uniqueSources = [...new Set(rows.map(r => r.source))].sort()
 
@@ -469,40 +473,87 @@ function ActivityFeedPanel({ rows, latestDate }: { rows: import('../types/warung
     return `${(s / 3600).toFixed(1)}h`
   }
 
+  const profileMax = byProfile.length > 0 ? Math.max(...byProfile.map(p => p.session_count), 1) : 1
+
   return (
-    <div className="grid grid--2">
-      <div className="panel">
-        <div className="mono" style={{ marginBottom: 10 }}>Sessions per day · all sources</div>
-        <VertBarChart values={dailyTotals} labels={days14.map(d => d.short)} maxValue={maxDaily} colorClass="teal" />
+    <>
+      <div className="grid grid--2">
+        <div className="panel">
+          <div className="mono" style={{ marginBottom: 10 }}>Sessions per day · all sources</div>
+          <VertBarChart values={dailyTotals} labels={days14.map(d => d.short)} maxValue={maxDaily} colorClass="teal" />
+        </div>
+        <div className="panel panel--alt">
+          <div className="mono" style={{ marginBottom: 10 }}>Latest · {latestDate} — by source</div>
+          {latestRows.length === 0
+            ? <div style={{ fontSize: 11, color: 'var(--muted)', padding: '8px 0' }}>No sessions on {latestDate}</div>
+            : <>
+                {latestRows.map(row => (
+                  <HBarRow
+                    key={row.source}
+                    label={row.source}
+                    value={row.session_count}
+                    max={maxSessions}
+                    colorClass={ACTIVITY_SOURCE_COLORS[row.source] ?? ''}
+                  />
+                ))}
+                <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+                  {latestRows.map(row => (
+                    <div key={row.source} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '3px 0' }}>
+                      <span style={{ color: 'var(--soft)' }}>{row.source}</span>
+                      <span className="mono" style={{ fontSize: 10 }}>
+                        {row.tool_call_total} tools · avg {fmtDuration(row.avg_duration_s)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+          }
+        </div>
       </div>
-      <div className="panel panel--alt">
-        <div className="mono" style={{ marginBottom: 10 }}>Latest · {latestDate} — by source</div>
-        {latestRows.length === 0
-          ? <div style={{ fontSize: 11, color: 'var(--muted)', padding: '8px 0' }}>No sessions on {latestDate}</div>
-          : <>
-              {latestRows.map(row => (
+
+      {byProfile.length > 0 && (
+        <>
+          <div className="gap-sm" />
+          <div className="grid grid--2">
+            <div className="panel">
+              <div className="mono" style={{ marginBottom: 10 }}>Sessions · 30d window — by profile</div>
+              {byProfile.map(p => (
                 <HBarRow
-                  key={row.source}
-                  label={row.source}
-                  value={row.session_count}
-                  max={maxSessions}
-                  colorClass={ACTIVITY_SOURCE_COLORS[row.source] ?? ''}
+                  key={p.profile}
+                  label={p.profile}
+                  value={p.session_count}
+                  max={profileMax}
+                  colorClass="teal"
                 />
               ))}
-              <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
-                {latestRows.map(row => (
-                  <div key={row.source} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '3px 0' }}>
-                    <span style={{ color: 'var(--soft)' }}>{row.source}</span>
-                    <span className="mono" style={{ fontSize: 10 }}>
-                      {row.tool_call_total} tools · avg {fmtDuration(row.avg_duration_s)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </>
-        }
-      </div>
-    </div>
+            </div>
+            <div className="panel panel--alt">
+              <div className="mono" style={{ marginBottom: 10 }}>Profile details · 30d window</div>
+              <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--line)' }}>
+                    <th style={{ textAlign: 'left', color: 'var(--muted)', fontWeight: 'normal', padding: '0 8px 6px 0', fontFamily: 'var(--mono)', fontSize: 10 }}>Profile</th>
+                    <th style={{ textAlign: 'right', color: 'var(--muted)', fontWeight: 'normal', padding: '0 0 6px 8px', fontFamily: 'var(--mono)', fontSize: 10 }}>Sessions</th>
+                    <th style={{ textAlign: 'right', color: 'var(--muted)', fontWeight: 'normal', padding: '0 0 6px 8px', fontFamily: 'var(--mono)', fontSize: 10 }}>Days</th>
+                    <th style={{ textAlign: 'right', color: 'var(--muted)', fontWeight: 'normal', padding: '0 0 6px 8px', fontFamily: 'var(--mono)', fontSize: 10 }}>Primary source</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {byProfile.map(p => (
+                    <tr key={p.profile} style={{ borderTop: '1px solid var(--line)' }}>
+                      <td style={{ padding: '5px 8px 5px 0', color: 'var(--fg)', fontFamily: 'var(--mono)', fontSize: 10 }}>{p.profile}</td>
+                      <td style={{ padding: '5px 0 5px 8px', textAlign: 'right', color: 'var(--soft)', fontFamily: 'var(--mono)', fontSize: 10 }}>{p.session_count}</td>
+                      <td style={{ padding: '5px 0 5px 8px', textAlign: 'right', color: 'var(--muted)', fontFamily: 'var(--mono)', fontSize: 10 }}>{p.active_days}</td>
+                      <td style={{ padding: '5px 0 5px 8px', textAlign: 'right', color: 'var(--muted)', fontFamily: 'var(--mono)', fontSize: 10 }}>{p.primary_source ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </>
   )
 }
 

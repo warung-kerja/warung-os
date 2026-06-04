@@ -24,6 +24,7 @@ import type {
   DotDelegationStatus,
   TickTickKanbanBoard,
   SessionActivityDaily,
+  SessionActivityByProfile,
 } from './warung-os'
 
 export type SourceMode = 'fixture' | 'snapshot'
@@ -75,6 +76,9 @@ export interface OperationsSnapshot {
   // Agent activity feed — per (day, source) session aggregate, 30-day window.
   // Aggregate metadata only: no titles, prompts, content, or credential fields.
   session_activity_daily?: SessionActivityDaily[]
+  // Per-profile summary over the collection window.
+  // Aggregate metadata only: no titles, prompts, content, or credential fields.
+  session_activity_by_profile?: SessionActivityByProfile[]
 }
 
 export interface WarungSnapshot {
@@ -135,6 +139,7 @@ export interface WarungData {
   providerCatalog: HermesProviderCatalogEntry[]
   // Agent activity feed
   sessionActivityDaily: SessionActivityDaily[]
+  sessionActivityByProfile: SessionActivityByProfile[]
   // Wiki
   wiki: WikiEntry[]
 }
