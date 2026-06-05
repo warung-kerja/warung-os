@@ -5,14 +5,29 @@ import type { CanonicalProject, CanonicalTeamMember, ApprovalItem, TickTickKanba
 
 function statusTag(status: string | null): JSX.Element {
   switch (status) {
-    case 'active':  return <span className="tag tag--ok">Active</span>
-    case 'moving':  return <span className="tag tag--blue">Moving</span>
-    case 'review':  return <span className="tag tag--signal">Review</span>
-    case 'blocked': return <span className="tag tag--warn">Blocked</span>
-    case 'paused':  return <span className="tag">Paused</span>
-    case 'done':    return <span className="tag tag--ok">Done</span>
-    default:        return <span className="tag">{status ?? '—'}</span>
+    case 'active':   return <span className="tag tag--ok">Active</span>
+    case 'moving':   return <span className="tag tag--blue">Moving</span>
+    case 'review':   return <span className="tag tag--signal">Review</span>
+    case 'blocked':  return <span className="tag tag--warn">Blocked</span>
+    case 'paused':   return <span className="tag">Paused</span>
+    case 'done':     return <span className="tag tag--ok">Done</span>
+    case 'unknown':  return <span className="tag" style={{ color: 'var(--muted)' }}>No data</span>
+    default:         return <span className="tag">{status ?? '—'}</span>
   }
+}
+
+function BoardBadge({ board }: { board: TickTickKanbanBoard }) {
+  const activeTasks = board.column_counts
+    .filter(c => ACTIVE_COLUMNS.has(c.column.toLowerCase()))
+    .reduce((sum, c) => sum + c.count, 0)
+  return (
+    <div style={{ marginTop: 6, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--muted)' }}>Board</span>
+      <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: activeTasks > 0 ? 'var(--signal)' : 'var(--soft)' }}>
+        {activeTasks > 0 ? `${activeTasks} active` : `${board.task_count} tasks`}
+      </span>
+    </div>
+  )
 }
 
 function priorityLabel(p: string | null): string {
@@ -300,6 +315,13 @@ export default function ActiveProjectsPage() {
     ? (kanbanBoards.find(b => b.board_name.toLowerCase() === selectedProject.name.toLowerCase()) ?? null)
     : null
 
+  // O(1) board lookup for all list rows
+  const boardByName = new Map(kanbanBoards.map(b => [b.board_name.toLowerCase(), b]))
+
+  // Frontmatter completeness — count projects with no usable status from Obsidian
+  const unknownCount = projects.filter(p => !p.status || p.status === 'unknown').length
+  const hasKnownStatus = unknownCount < projects.length
+
   return (
     <div className="page">
       <div className="page-head">
@@ -327,40 +349,59 @@ export default function ActiveProjectsPage() {
         </div>
       </div>
 
+      {unknownCount > 0 && (
+        <div style={{ border: '1px solid var(--line)', borderBottom: 'none', background: 'var(--panel)', padding: '9px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+          <span className="mono" style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+            {unknownCount}/{projects.length} no frontmatter
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--soft)' }}>
+            Add <code style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>status:</code> and{' '}
+            <code style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>priority:</code> to Obsidian project notes to unlock full coverage.
+            {hasKnownStatus && <span style={{ color: 'var(--ok)', marginLeft: 8 }}>Some projects tracked.</span>}
+          </span>
+        </div>
+      )}
+
       <div className="project-table">
         <div className="project-row project-row--header">
           <div className="mono">Project</div>
           <div className="mono">Stage / Phase</div>
           <div className="mono">Blocker / Next</div>
-          <div className="mono">Status</div>
+          <div className="mono">Status · Board</div>
         </div>
-        {projects.map(project => (
-          <div
-            key={project.id}
-            className="project-row"
-            onClick={() => setSelectedId(project.id === selectedId ? null : project.id)}
-            style={{ cursor: 'pointer', outline: project.id === selectedId ? '1px solid var(--ok)' : 'none' }}
-          >
-            <div>
-              <div className="project-name">{project.name}</div>
-              <div className="project-desc">{project.next_step?.slice(0, 80)}</div>
-            </div>
-            <div>
-              <div style={{ marginBottom: 4 }}>{project.current_phase?.split('—')[0].trim()}</div>
-              <div className="project-desc">{project.current_phase?.split('—')[1]?.trim()}</div>
-            </div>
-            <div>
-              {project.blocker
-                ? <p className="project-desc" style={{ color: 'var(--warn)' }}>{project.blocker}</p>
-                : <p className="project-desc">—</p>
-              }
-              <div className="mono" style={{ marginTop: 6 }}>
-                {project.owner} · {fmtDate(project.last_movement_at)}
+        {projects.map(project => {
+          const rowBoard = boardByName.get(project.name.toLowerCase()) ?? null
+          return (
+            <div
+              key={project.id}
+              className="project-row"
+              onClick={() => setSelectedId(project.id === selectedId ? null : project.id)}
+              style={{ cursor: 'pointer', outline: project.id === selectedId ? '1px solid var(--ok)' : 'none' }}
+            >
+              <div>
+                <div className="project-name">{project.name}</div>
+                <div className="project-desc">{project.next_step?.slice(0, 80)}</div>
+              </div>
+              <div>
+                <div style={{ marginBottom: 4 }}>{project.current_phase?.split('—')[0].trim()}</div>
+                <div className="project-desc">{project.current_phase?.split('—')[1]?.trim()}</div>
+              </div>
+              <div>
+                {project.blocker
+                  ? <p className="project-desc" style={{ color: 'var(--warn)' }}>{project.blocker}</p>
+                  : <p className="project-desc">—</p>
+                }
+                <div className="mono" style={{ marginTop: 6 }}>
+                  {project.owner} · {fmtDate(project.last_movement_at)}
+                </div>
+              </div>
+              <div>
+                {statusTag(project.status)}
+                {rowBoard && <BoardBadge board={rowBoard} />}
               </div>
             </div>
-            <div>{statusTag(project.status)}</div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {selectedProject && (
