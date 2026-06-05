@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useWarungData } from '../data/dataSource'
 import { useLocalState } from '../data/localState'
 import type { DailyBriefItem, ApprovalStatus } from '../types/warung-os'
@@ -35,18 +36,94 @@ function approvalTagClass(status: ApprovalStatus): string {
 export default function HomePage() {
   const { data } = useWarungData()
   const { localApprovalStates, updateApprovalStatus, recordView } = useLocalState()
-  const { projects, approvals, dailyBrief } = data
+  const { projects, approvals, dailyBrief, cronJobs, sourceHealth, sessionActivityDaily, meta } = data
 
+  // --- Approval signals ---
   const effectiveApprovals = approvals.map(ap => ({
     ...ap,
     status: (localApprovalStates[ap.id] ?? ap.status) as ApprovalStatus,
   }))
+  const pendingApprovals = effectiveApprovals.filter(a => a.status === 'pending')
 
-  const movedProjects = projects.filter(p => p.status === 'moving' || p.status === 'active').length
-  const runsSucceeded = 11
-  const blocked = 2
-  const razAttention = effectiveApprovals.filter(a => a.status === 'pending').length
+  // --- Project signals ---
+  // Generator already skips archived/_Archive folders, so all returned projects are in scope.
+  // 'unknown' status means unstructured frontmatter — still tracked, not archived.
+  const TERMINAL = new Set(['archived', 'done', 'cancelled'])
+  const activeProjects = projects.filter(p => !TERMINAL.has(p.status ?? ''))
+  const blockedProjects = projects.filter(p => p.status === 'blocked')
+
+  // --- Cron signals ---
+  const enabledCronJobs = cronJobs.filter(j => j.enabled !== false)
+  const cronJobsWithRuns = enabledCronJobs.filter(j => (j.run_count ?? 0) > 0)
+  const errorCronJobs = enabledCronJobs.filter(j => j.error != null)
+
+  // --- Source health signals ---
+  const okSources = sourceHealth.filter(s => s.status === 'ok')
+  const warnSources = sourceHealth.filter(s => s.status === 'warn')
+  const badSources = sourceHealth.filter(s => s.status === 'bad')
+
+  // --- Most recent session day across all sources ---
+  const recentSession = sessionActivityDaily.length > 0
+    ? [...sessionActivityDaily].sort((a, b) => b.date.localeCompare(a.date))[0]
+    : null
+
+  // --- Summary metrics ---
+  const movedProjects = activeProjects.length
+  const runsSucceeded = cronJobsWithRuns.length
+  const blocked = blockedProjects.length + badSources.length
+  const razAttention = pendingApprovals.length
   const primaryFocus = dailyBrief.find(d => d.type === 'needs_raz')
+
+  // --- Metric notes (derived from real data) ---
+  const activeProjectNames =
+    activeProjects.slice(0, 3).map(p => p.name).join(', ') || '—'
+  const runsNote =
+    enabledCronJobs.length > 0
+      ? cronJobsWithRuns.length === enabledCronJobs.length
+        ? `All ${enabledCronJobs.length} jobs ran · 30d`
+        : `${cronJobsWithRuns.length} of ${enabledCronJobs.length} enabled jobs · 30d`
+      : 'No cron data'
+  const blockedNote =
+    [
+      ...blockedProjects.slice(0, 2).map(p => p.name),
+      ...badSources.slice(0, 1).map(s => s.label),
+    ].join(' · ') || 'None'
+  const razAttentionNote =
+    pendingApprovals.length > 0 ? pendingApprovals[0].title : 'Nothing pending'
+
+  // --- Dynamic focus headline and body ---
+  let focusHeadline: ReactNode
+  let focusBody: string
+  if (pendingApprovals.length > 0) {
+    focusHeadline =
+      pendingApprovals.length === 1 ? (
+        <>{pendingApprovals[0].project}:<br />approval needed.</>
+      ) : (
+        <>Clear the<br />approval queue.</>
+      )
+    focusBody =
+      pendingApprovals.length === 1
+        ? `"${pendingApprovals[0].title}" is waiting. Fast decisions unblock downstream work.`
+        : `${pendingApprovals.length} approvals waiting. Fast decisions unblock downstream work.`
+  } else if (blockedProjects.length > 0) {
+    const bp = blockedProjects[0]
+    focusHeadline = <>Unblock<br />{bp.name}.</>
+    focusBody = bp.blocker
+      ? `Blocker: ${bp.blocker}.`
+      : `${bp.name} needs attention. Clearing this unblocks the next phase.`
+  } else if (badSources.length > 0) {
+    focusHeadline = <>Check<br />source health.</>
+    focusBody = `${badSources.length} source${badSources.length > 1 ? 's are' : ' is'} unreachable. See Operations → Sources for details.`
+  } else {
+    focusHeadline = <>Workspace is healthy.<br />Keep the momentum.</>
+    focusBody =
+      `${activeProjects.length} project${activeProjects.length !== 1 ? 's are' : ' is'} active and moving.` +
+      (warnSources.length > 0
+        ? ` ${warnSources.length} source warning${warnSources.length > 1 ? 's' : ''} to monitor.`
+        : ' No blockers.')
+  }
+
+  const showOpsStrip = sourceHealth.length > 0 || enabledCronJobs.length > 0
 
   return (
     <div className="page">
@@ -82,28 +159,79 @@ export default function HomePage() {
         </div>
       </div>
 
-      <div className="grid grid--4 panel--min" style={{ marginBottom: 22 }}>
+      <div className="grid grid--4 panel--min" style={{ marginBottom: 16 }}>
         <div className="panel panel--min">
           <div className="mono">Projects moved</div>
           <div className="metric-value">{movedProjects}</div>
-          <div className="metric-note">Warung OS, BofB, Etsy Ops, Passive Engine</div>
+          <div className="metric-note">{activeProjectNames}</div>
         </div>
         <div className="panel panel--min">
           <div className="mono">Runs succeeded</div>
           <div className="metric-value">{runsSucceeded}</div>
-          <div className="metric-note">No intervention needed</div>
+          <div className="metric-note">{runsNote}</div>
         </div>
         <div className="panel panel--min">
           <div className="mono">Blocked</div>
           <div className="metric-value">{blocked}</div>
-          <div className="metric-note">Template Factory spec + Etsy Listings cache</div>
+          <div className="metric-note">{blockedNote}</div>
         </div>
         <div className="panel panel--min">
           <div className="mono">Raz attention</div>
-          <div className="metric-value text-signal">{razAttention}</div>
-          <div className="metric-note">Warung OS approval, BofB poster direction</div>
+          <div className={`metric-value${razAttention > 0 ? ' text-signal' : ''}`}>{razAttention}</div>
+          <div className="metric-note">{razAttentionNote}</div>
         </div>
       </div>
+
+      {showOpsStrip && (
+        <div style={{
+          display: 'flex', gap: 16, alignItems: 'center', marginBottom: 16,
+          padding: '7px 12px', border: '1px solid var(--line)', background: '#080b10',
+          flexWrap: 'wrap',
+        }}>
+          {sourceHealth.length > 0 && (
+            <>
+              <span className="mono" style={{ fontSize: 10, color: 'var(--muted)' }}>SOURCES</span>
+              {okSources.length > 0 && (
+                <span style={{ fontSize: 10, color: 'var(--ok)' }}>{okSources.length} ok</span>
+              )}
+              {warnSources.length > 0 && (
+                <span style={{ fontSize: 10, color: 'var(--warn)' }}>{warnSources.length} warn</span>
+              )}
+              {badSources.length > 0 && (
+                <span style={{ fontSize: 10, color: 'var(--bad)' }}>{badSources.length} bad</span>
+              )}
+            </>
+          )}
+          {enabledCronJobs.length > 0 && (
+            <>
+              {sourceHealth.length > 0 && (
+                <span style={{ color: 'var(--line-strong)' }}>|</span>
+              )}
+              <span className="mono" style={{ fontSize: 10, color: 'var(--muted)' }}>CRON</span>
+              <span style={{ fontSize: 10, color: errorCronJobs.length > 0 ? 'var(--bad)' : 'var(--soft)' }}>
+                {cronJobsWithRuns.length}/{enabledCronJobs.length} ran
+                {errorCronJobs.length > 0
+                  ? ` · ${errorCronJobs.length} error${errorCronJobs.length > 1 ? 's' : ''}`
+                  : ''}
+              </span>
+            </>
+          )}
+          {recentSession && (
+            <>
+              <span style={{ color: 'var(--line-strong)' }}>|</span>
+              <span className="mono" style={{ fontSize: 10, color: 'var(--muted)' }}>SESSIONS</span>
+              <span style={{ fontSize: 10, color: 'var(--soft)' }}>
+                {recentSession.session_count} on {recentSession.date}
+              </span>
+            </>
+          )}
+          {meta.generatedAt && (
+            <span style={{ fontSize: 10, color: 'var(--muted)', marginLeft: 'auto' }}>
+              snapshot {new Date(meta.generatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="brief-layout">
         <div className="panel" style={{ minHeight: 0 }}>
@@ -119,11 +247,8 @@ export default function HomePage() {
 
         <div className="panel panel--alt" style={{ minHeight: 0 }}>
           <div className="mono" style={{ marginBottom: 12 }}>Today's suggested focus</div>
-          <h2>Approve the shell,<br />then unblock Gabs.</h2>
-          <p style={{ marginTop: 8 }}>
-            Phase 1 is built and ready. Two things need Raz: the Warung OS structure approval, and
-            the BofB poster direction call. Both are fast decisions. Both unblock downstream work.
-          </p>
+          <h2>{focusHeadline}</h2>
+          <p style={{ marginTop: 8 }}>{focusBody}</p>
 
           {primaryFocus && (
             <div className="approval-box" style={{ marginTop: 14 }}>
@@ -134,7 +259,6 @@ export default function HomePage() {
                 className="btn btn--primary"
                 style={{ marginTop: 10 }}
                 onClick={() => {
-                  // Approve the first approval item matching the primaryFocus project, if any.
                   const match = primaryFocus
                     ? effectiveApprovals.find(
                         a => a.project === primaryFocus.project &&
