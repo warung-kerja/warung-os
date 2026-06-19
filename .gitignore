@@ -16,3 +16,9 @@ public/snapshots/latest.json
 # Phase 5 local hosted-mirror export package — sanitized but real/private, never commit
 hosted-export/
 .vercel
+
+# Local finance inspection/build artifacts — private household data, never commit
+.finance-inspection-summary.md
+finance-os-v2-summary.md
+.tmp_build_finance_os.py
+.warung-os-runtime/
