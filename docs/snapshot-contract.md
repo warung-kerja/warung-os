@@ -1,7 +1,7 @@
 # Warung OS — Snapshot Contract
 
 **Schema version:** `1`
-**Updated:** 2026-06-02 (Phase 4 — run history UI, dead-button hardening)
+**Updated:** 2026-06-19 (Dev Updates module)
 **Owner:** Mia (tech lead)
 
 ---
@@ -21,7 +21,7 @@ The snapshot contract is typed in `src/types/snapshot.ts`.
 ```json
 {
   "meta":       { ... },
-  "home":       { "daily_brief": [], "approvals": [] },
+  "home":       { "daily_brief": [], "dev_updates": { ... }, "approvals": [] },
   "projects":   { "items": [], "team_members": [], "kanban_boards": [] },
   "operations": { "source_scope": "hermes-only", ... },
   "wiki":       { "entries": [] }
@@ -43,6 +43,27 @@ The snapshot contract is typed in `src/types/snapshot.ts`.
 | `redactions_applied` | boolean | yes | True if any values were redacted |
 | `is_demo` | boolean | yes | True for fixture-backed / demo snapshots |
 | `adapter_warnings` | Record<string, string> | yes | Per-adapter availability notes |
+
+---
+
+## home
+
+`home.dev_updates` powers the Brief page Dev Updates module: a plain-English recap of dev progress since yesterday. It is generated from safe local signals only: Warung OS git metadata, `docs/worksession.md`, sanitized TickTick board cache, Hermes cron/gateway/source-health aggregates, and project metadata. It must not include raw prompts, transcripts, secrets, cron delivery targets, or absolute private vault paths.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `window` | `"last_24h"` | Human time window for the module |
+| `current_focus` | string | Layman-friendly current product focus |
+| `progress_percent` | number \| null | Useful estimate; avoid fake precision |
+| `progress_label` | string | Explains the basis, e.g. `23% estimated from board` |
+| `summary` | string | One-paragraph reminder of what moved |
+| `keypoints` | `DevUpdateItem[]` | 3–5 plain-language progress bullets |
+| `blockers` | `DevUpdateItem[]` | Dev/project execution blockers |
+| `tool_issues` | `DevUpdateItem[]` | Tool/session/system issues such as stale sources or delegation gaps |
+| `other_projects` | `DevUpdateItem[]` | Other dev project signals seen in the workspace |
+| `sources` | string[] | Short source labels shown in the UI |
+
+Each `DevUpdateItem` has `{ id, label, body, source, project? }`, where `source` is one of `git`, `worksession`, `board`, `hermes`, `system`, or `manual`.
 
 ---
 

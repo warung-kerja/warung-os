@@ -178,6 +178,28 @@ export interface DailyBriefItem {
   project?: string
 }
 
+export interface DevUpdateItem {
+  id: string
+  label: string
+  body: string
+  source: 'git' | 'worksession' | 'board' | 'hermes' | 'system' | 'manual'
+  project?: string
+}
+
+export interface DevUpdatesSummary {
+  window: 'last_24h'
+  generated_at: string
+  current_focus: string
+  progress_percent: number | null
+  progress_label: string
+  summary: string
+  keypoints: DevUpdateItem[]
+  blockers: DevUpdateItem[]
+  tool_issues: DevUpdateItem[]
+  other_projects: DevUpdateItem[]
+  sources: string[]
+}
+
 export interface ApprovalItem {
   id: string
   title: string

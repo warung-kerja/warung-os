@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useWarungData } from '../data/dataSource'
 import { useLocalState } from '../data/localState'
-import type { DailyBriefItem, ApprovalStatus } from '../types/warung-os'
+import type { DailyBriefItem, ApprovalStatus, DevUpdateItem, DevUpdatesSummary } from '../types/warung-os'
 
 function tagClass(type: DailyBriefItem['type']): string {
   switch (type) {
@@ -33,10 +33,75 @@ function approvalTagClass(status: ApprovalStatus): string {
   }
 }
 
+function sourceTagClass(source: DevUpdateItem['source']): string {
+  switch (source) {
+    case 'git':         return 'tag tag--blue'
+    case 'worksession': return 'tag tag--ok'
+    case 'board':       return 'tag tag--signal'
+    case 'hermes':      return 'tag tag--warn'
+    case 'system':      return 'tag'
+    case 'manual':      return 'tag'
+  }
+}
+
+function DevUpdateList({ label, items, empty }: { label: string; items: DevUpdateItem[]; empty: string }) {
+  return (
+    <div className="dev-update-section">
+      <div className="mono dev-update-section-label">{label}</div>
+      {items.length > 0 ? items.map(item => (
+        <div key={item.id} className="dev-update-row">
+          <div>
+            <div className="dev-update-title">{item.label}</div>
+            <p>{item.body}</p>
+          </div>
+          <span className={sourceTagClass(item.source)}>{item.source}</span>
+        </div>
+      )) : (
+        <div className="dev-update-empty">{empty}</div>
+      )}
+    </div>
+  )
+}
+
+function DevUpdatesPanel({ devUpdates }: { devUpdates: DevUpdatesSummary | null }) {
+  if (!devUpdates) return null
+  const progress = devUpdates.progress_percent ?? 0
+  return (
+    <div className="dev-updates-panel">
+      <div className="dev-updates-head">
+        <div>
+          <div className="mono">Dev updates · since yesterday</div>
+          <h2>{devUpdates.current_focus}</h2>
+          <p>{devUpdates.summary}</p>
+        </div>
+        <div className="dev-progress-card">
+          <div className="mono">Progress</div>
+          <div className="dev-progress-value">{devUpdates.progress_percent ?? '—'}%</div>
+          <div className="metric-note">{devUpdates.progress_label}</div>
+          <div className="progress-bar" style={{ marginTop: 10 }}>
+            <div className="progress-bar-fill" style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} />
+          </div>
+        </div>
+      </div>
+
+      <div className="dev-updates-grid">
+        <DevUpdateList label="Key moves" items={devUpdates.keypoints} empty="No major dev movement detected yet." />
+        <DevUpdateList label="Blockers" items={devUpdates.blockers} empty="No dev blockers detected." />
+        <DevUpdateList label="Tools / sessions" items={devUpdates.tool_issues} empty="No tool issues detected." />
+        <DevUpdateList label="Other project signals" items={devUpdates.other_projects} empty="No other dev project signals detected." />
+      </div>
+
+      <div className="dev-update-sources">
+        Sources: {devUpdates.sources.join(' · ')}
+      </div>
+    </div>
+  )
+}
+
 export default function HomePage() {
   const { data } = useWarungData()
   const { localApprovalStates, updateApprovalStatus, recordView } = useLocalState()
-  const { projects, approvals, dailyBrief, cronJobs, sourceHealth, sessionActivityDaily, meta } = data
+  const { projects, approvals, dailyBrief, devUpdates, cronJobs, sourceHealth, sessionActivityDaily, meta } = data
 
   // --- Approval signals ---
   const effectiveApprovals = approvals.map(ap => ({
@@ -232,6 +297,8 @@ export default function HomePage() {
           )}
         </div>
       )}
+
+      <DevUpdatesPanel devUpdates={devUpdates} />
 
       <div className="brief-layout">
         <div className="panel" style={{ minHeight: 0 }}>

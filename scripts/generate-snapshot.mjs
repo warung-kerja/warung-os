@@ -821,6 +821,246 @@ function collectTickTickKanban() {
   }
 }
 
+function stripMarkdownInline(value) {
+  return String(value ?? '')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function collectWorksessionSignals() {
+  const filePath = join(ROOT, 'docs', 'worksession.md')
+  try {
+    if (!existsSync(filePath)) {
+      return { ok: false, error: 'docs/worksession.md not found', currentFocus: null, latestCompleted: [] }
+    }
+
+    const raw = readFileSync(filePath, 'utf8')
+    const lines = raw.split('\n')
+    let currentFocus = null
+    const priorityIndex = lines.findIndex(line => line.trim().toLowerCase() === '## current priority')
+    if (priorityIndex >= 0) {
+      for (const line of lines.slice(priorityIndex + 1)) {
+        const trimmed = line.trim()
+        if (!trimmed) continue
+        if (trimmed.startsWith('## ')) break
+        currentFocus = stripMarkdownInline(trimmed)
+        break
+      }
+    }
+
+    const latestCompleted = []
+    const completedRe = /^\*\*(.+?completed \(\d{4}-\d{2}-\d{2}\):)\*\*\s*(.+)$/i
+    for (const line of lines) {
+      const match = line.match(completedRe)
+      if (!match) continue
+      latestCompleted.push(stripMarkdownInline(`${match[1]} ${match[2]}`).slice(0, 280))
+      if (latestCompleted.length >= 3) break
+    }
+
+    return { ok: true, currentFocus, latestCompleted }
+  } catch (err) {
+    return { ok: false, error: String(err?.message ?? err), currentFocus: null, latestCompleted: [] }
+  }
+}
+
+function collectDirtyWorkspaceProjects() {
+  try {
+    const statusRaw = execSync('git status --porcelain', {
+      cwd: ROOT, encoding: 'utf8', stdio: 'pipe',
+    })
+    if (!statusRaw.trim()) return []
+
+    const projectHints = new Map()
+    for (const line of statusRaw.split('\n').filter(Boolean)) {
+      const filePath = line.replace(/^\s*[MADRCU?!]{1,2}\s+/, '').trim()
+      const top = filePath.split('/')[0]
+      if (!top) continue
+      const label = top
+        .replace(/[-_]+/g, ' ')
+        .replace(/\b\w/g, ch => ch.toUpperCase())
+      projectHints.set(label, (projectHints.get(label) ?? 0) + 1)
+    }
+    return [...projectHints.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([name, count]) => ({ name, count }))
+  } catch (_) {
+    return []
+  }
+}
+
+function estimateDevProgress(projectItems, ticktickResult) {
+  const warung = projectItems.find(p => p.id === 'warung-os')
+  const board = ticktickResult.boards?.[0]
+  const taskTotal = board?.task_count ?? 0
+  const doneCount = board?.column_counts
+    ?.filter(c => /done|approved|complete/i.test(c.column ?? ''))
+    ?.reduce((sum, c) => sum + (Number(c.count) || 0), 0) ?? 0
+
+  if (taskTotal > 0) {
+    const pct = Math.max(5, Math.min(95, Math.round((doneCount / taskTotal) * 100)))
+    return { percent: pct, label: `${pct}% estimated from board` }
+  }
+
+  if (warung?.status === 'done') return { percent: 100, label: '100% from project status' }
+  if (warung?.status === 'blocked') return { percent: 50, label: '50% estimated — blocked' }
+  return { percent: 60, label: '60% estimated' }
+}
+
+function buildDevUpdates({ gitResult, worksessionResult, ticktickResult, sourceHealth, cronJobs, gatewayStatus, dotDelegResult, projectItems }) {
+  const progress = estimateDevProgress(projectItems, ticktickResult)
+  const currentFocus = worksessionResult.currentFocus || 'Warung OS core product MVP — make the Brief page useful as Raz’s daily check-in.'
+  const commits24h = gitResult.ok ? (gitResult.signal.commits_24h ?? 0) : 0
+  const workingTreeDirty = gitResult.ok && gitResult.signal.working_tree === 'dirty'
+  const keypoints = []
+
+  if (worksessionResult.latestCompleted.length > 0) {
+    for (const [index, item] of worksessionResult.latestCompleted.entries()) {
+      keypoints.push({
+        id: `du-worksession-${index + 1}`,
+        label: index === 0 ? 'Latest completed slice' : 'Recent dev progress',
+        body: item,
+        source: 'worksession',
+        project: 'warung-os',
+      })
+    }
+  }
+
+  if (commits24h > 0) {
+    keypoints.unshift({
+      id: 'du-git-24h',
+      label: 'Code moved in the last 24h',
+      body: `${commits24h} commit${commits24h === 1 ? '' : 's'} landed in the Warung OS repo since yesterday.`,
+      source: 'git',
+      project: 'warung-os',
+    })
+  } else if (gitResult.ok) {
+    keypoints.unshift({
+      id: 'du-git-no-commits',
+      label: 'No new Warung OS commits yet',
+      body: 'The repo has no commits in the last 24 hours; this usually means the latest work is still in-session or uncommitted.',
+      source: 'git',
+      project: 'warung-os',
+    })
+  }
+
+  const board = ticktickResult.boards?.[0]
+  if (board) {
+    const activeColumns = (board.column_counts ?? [])
+      .filter(c => /build|qa|review|active/i.test(c.column ?? ''))
+      .map(c => `${c.column}: ${c.count}`)
+      .join(' · ')
+    keypoints.push({
+      id: 'du-board-state',
+      label: 'Dev board status',
+      body: activeColumns || `${board.task_count ?? 0} task(s) tracked on the Warung OS board.`,
+      source: 'board',
+      project: 'warung-os',
+    })
+  }
+
+  const blockers = []
+  const blockedProjects = projectItems.filter(p => p.status === 'blocked')
+  for (const project of blockedProjects.slice(0, 2)) {
+    blockers.push({
+      id: `du-blocked-${project.id}`,
+      label: `${project.name} blocked`,
+      body: project.blocker || 'Project is marked blocked in project metadata.',
+      source: 'system',
+      project: project.id,
+    })
+  }
+  if (worksessionResult.latestCompleted.some(item => /stalled|empty stdout|empty output|timeout/i.test(item))) {
+    blockers.push({
+      id: 'du-session-stall',
+      label: 'Worker session issue seen recently',
+      body: 'A recent dev slice mentioned stalled worker runs or empty agent output, so Mia completed/replaced that work directly.',
+      source: 'worksession',
+      project: 'warung-os',
+    })
+  }
+  if (workingTreeDirty) {
+    blockers.push({
+      id: 'du-git-dirty',
+      label: 'Uncommitted workspace changes',
+      body: 'The Warung OS repo has local uncommitted files. Review and commit/discard before calling the slice finished.',
+      source: 'git',
+      project: 'warung-os',
+    })
+  }
+
+  const toolIssues = []
+  const badOrWarnSources = sourceHealth.filter(s => s.status === 'bad' || s.status === 'warn')
+  for (const source of badOrWarnSources.slice(0, 3)) {
+    toolIssues.push({
+      id: `du-source-${source.id}`,
+      label: source.status === 'bad' ? 'Source needs attention' : 'Source warning',
+      body: `${source.label}: ${source.error || source.status}`,
+      source: 'system',
+      project: 'warung-os',
+    })
+  }
+  const cronErrors = cronJobs.filter(j => j.enabled !== false && j.error != null)
+  for (const job of cronErrors.slice(0, 2)) {
+    toolIssues.push({
+      id: `du-cron-${safeId(job.id ?? job.name)}`,
+      label: 'Automation error',
+      body: `${job.name || job.id}: ${job.error}`,
+      source: 'hermes',
+      project: 'warung-os',
+    })
+  }
+  const stoppedGateways = gatewayStatus.filter(g => g.gateway_state !== 'running')
+  if (stoppedGateways.length > 0) {
+    toolIssues.push({
+      id: 'du-gateway-state',
+      label: 'Gateway not fully running',
+      body: `${stoppedGateways.length} Hermes gateway profile${stoppedGateways.length === 1 ? ' is' : 's are'} not running.`,
+      source: 'hermes',
+      project: 'warung-os',
+    })
+  }
+  if (dotDelegResult.warning) {
+    toolIssues.push({
+      id: 'du-dot-delegation',
+      label: 'Delegation status incomplete',
+      body: 'Dot delegation data is unavailable, so the dashboard cannot yet show full worker/delegation health.',
+      source: 'hermes',
+      project: 'warung-os',
+    })
+  }
+
+  const otherProjects = collectDirtyWorkspaceProjects()
+    .filter(p => !/^src$|^docs$|^scripts$|^public$|^dist$|^wireframes$/i.test(p.name))
+    .map((p, index) => ({
+      id: `du-other-${index + 1}`,
+      label: p.name,
+      body: `${p.count} uncommitted file${p.count === 1 ? '' : 's'} detected in this workspace area; review whether this belongs to a separate dev project.`,
+      source: 'git',
+      project: safeId(p.name),
+    }))
+
+  const sourceNames = ['git', 'docs/worksession.md', 'Hermes health']
+  if (ticktickResult.ok) sourceNames.push('TickTick cache')
+
+  return {
+    window: 'last_24h',
+    generated_at: nowISO,
+    current_focus: currentFocus,
+    progress_percent: progress.percent,
+    progress_label: progress.label,
+    summary: `${currentFocus} Main signal: ${keypoints[0]?.body ?? 'No major dev movement detected in the last 24 hours.'}`.slice(0, 320),
+    keypoints: keypoints.slice(0, 5),
+    blockers: blockers.slice(0, 4),
+    tool_issues: toolIssues.slice(0, 5),
+    other_projects: otherProjects.slice(0, 4),
+    sources: sourceNames,
+  }
+}
+
 // ---- Run all collectors ----
 const gitResult        = collectGitSignals(ROOT)
 const { modelHealth, gatewayStatus, providerCatalog } = collectProviderHealth(HERMES_PROFILES, nowISO)
@@ -833,6 +1073,7 @@ const toolUsageResult       = collectToolUsage(HERMES_PROFILES, nowISO)
 const sessionActivityResult = collectSessionActivity(HERMES_PROFILES, nowISO)
 const dotDelegResult        = collectDotDelegation(HERMES_PROFILES, nowISO)
 const teamMembersResult = collectTeamMembers(HERMES_PROFILES, nowISO)
+const worksessionResult = collectWorksessionSignals()
 // sourceHealth runs after other collectors so it can reflect live state.db presence
 const sourceHealth     = collectSourceHealth()
 const durationMs       = Date.now() - startMs
@@ -877,6 +1118,16 @@ const projectItems = obsidianResult.ok && enrichedProjects.length > 0
 
 const gatewayRunning = gatewayStatus.filter(g => g.gateway_state === 'running').length
 const gatewayPlatformsSummary = gatewayStatus.flatMap(g => g.platforms).map(p => `${p.name}:${p.state}`).join(', ')
+const devUpdates = buildDevUpdates({
+  gitResult,
+  worksessionResult,
+  ticktickResult,
+  sourceHealth,
+  cronJobs,
+  gatewayStatus,
+  dotDelegResult,
+  projectItems,
+})
 
 const adapterWarnings = {
   workspace: gitResult.ok
@@ -897,6 +1148,9 @@ const adapterWarnings = {
     ? `Session activity feed connected (state.db sessions). ${sessionActivityResult.profileCount} profile(s). ${sessionActivityResult.daily.length} day-source row(s) (${sessionActivityResult.rowCount} raw query rows). 30-day window. Reads: started_at, ended_at, source, model, message_count, tool_call_count, input_tokens, output_tokens. Never reads: title, system_prompt, model_config, handoff_state, billing/cost fields, user_id.`
     : `Session activity feed: no data found in sessions table across ${sessionActivityResult.profileCount} profile(s) — state.db may be absent or schema incompatible.`,
   agent_status: teamMembersResult.note,
+  dev_updates: worksessionResult.ok
+    ? `Dev updates generated from git, worksession notes, board cache, and Hermes health. Keypoints: ${devUpdates.keypoints.length}; blockers: ${devUpdates.blockers.length}; tool issues: ${devUpdates.tool_issues.length}.`
+    : `Dev updates generated with limited worksession context: ${worksessionResult.error}`,
   dot_delegation: dotDelegResult.warning,
   obsidian_projects: obsidianResult.ok
     ? `Obsidian project frontmatter collected from 03_Active_Projects/. ${obsidianResult.projects.length} folder(s) found. Structured projects: ${obsidianResult.projects.filter(p => p.registry_status === 'registered').length}. Folder paths redacted. Body content not read.`
@@ -992,6 +1246,7 @@ const snapshot = {
         project: 'warung-os',
       },
     ],
+    dev_updates: devUpdates,
     approvals: [],
   },
 

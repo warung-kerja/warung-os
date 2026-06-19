@@ -16,6 +16,7 @@ import type {
   ToolUsageDaily,
   WorkspaceSignalSnapshot,
   DailyBriefItem,
+  DevUpdatesSummary,
   ApprovalItem,
   WikiEntry,
   HermesModelHealth,
@@ -89,6 +90,7 @@ export interface WarungSnapshot {
   meta: SnapshotMeta
   home: {
     daily_brief: DailyBriefItem[]
+    dev_updates?: DevUpdatesSummary
     approvals: ApprovalItem[]
   }
   projects: {
@@ -126,6 +128,7 @@ export interface WarungData {
   kanbanBoards: TickTickKanbanBoard[]
   // Home
   dailyBrief: DailyBriefItem[]
+  devUpdates: DevUpdatesSummary | null
   approvals: ApprovalItem[]
   // Operations (always Hermes-scoped when source_mode = snapshot)
   agentTokenDaily: AgentTokenUsageDaily[]

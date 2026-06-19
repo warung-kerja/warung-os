@@ -10,6 +10,7 @@ import type {
   ToolUsageDaily,
   WorkspaceSignalSnapshot,
   DailyBriefItem,
+  DevUpdatesSummary,
   ApprovalItem,
   WikiEntry,
   HermesModelHealth,
@@ -220,6 +221,51 @@ export const dailyBriefFixtures: DailyBriefItem[] = [
     project: 'warung-os',
   },
 ]
+
+export const devUpdatesFixture: DevUpdatesSummary = {
+  window: 'last_24h',
+  generated_at: SNAP,
+  current_focus: 'Warung OS core MVP — make the Brief page useful as Raz’s daily check-in.',
+  progress_percent: 62,
+  progress_label: '62% estimated',
+  summary: 'Yesterday’s dev work focused on turning Warung OS from a static dashboard into a useful daily operating brief.',
+  keypoints: [
+    {
+      id: 'du-fixture-1',
+      label: 'Brief page improved',
+      body: 'The Morning Brief now uses real workspace signals instead of stale placeholder copy.',
+      source: 'worksession',
+      project: 'warung-os',
+    },
+    {
+      id: 'du-fixture-2',
+      label: 'Active Projects clearer',
+      body: 'Project metadata and board status are easier to read, so active work is less likely to get lost.',
+      source: 'board',
+      project: 'warung-os',
+    },
+  ],
+  blockers: [
+    {
+      id: 'du-fixture-blocker-1',
+      label: 'No major product blocker',
+      body: 'Fixture mode has no live blocker feed. Check the live snapshot for current blockers.',
+      source: 'system',
+      project: 'warung-os',
+    },
+  ],
+  tool_issues: [
+    {
+      id: 'du-fixture-tool-1',
+      label: 'Tool status depends on live snapshot',
+      body: 'Hermes, Codex, cron, and source-health issues are summarized when local snapshot data is available.',
+      source: 'hermes',
+      project: 'warung-os',
+    },
+  ],
+  other_projects: [],
+  sources: ['fixture example'],
+}
 
 // ---- APPROVALS ----
 
